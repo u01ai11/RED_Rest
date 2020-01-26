@@ -41,23 +41,23 @@ for part in folders:
         print(mprages)
         mprage_f = mprages[-1]
 
-    # Convert to Dicom
-    dicom2nifti.convert_directory(join(dicoms, part, mprage_f), join(STRUCTDIR, 'T1'), compression=True, reorient=True)
-    # rename to subject name
-    try:
-        outname = [f for f in mprage_f.split("/")[1] if f.isdigit()][2] + '_cbu_mprage_32chn.nii.gz'
-        os.system(f'mv {join(STRUCTDIR, "T1", outname)} {join(STRUCTDIR, "T1", part.split("_")[0])}.nii.gz')
-    except:
+    if [f for f in mprage_f.split("/")[1] if f.isdigit()][2] == '0':
         outname = '10_cbu_mprage_32chn.nii.gz'
+    else:
+        outname = [f for f in mprage_f.split("/")[1] if f.isdigit()][2] + '_cbu_mprage_32chn.nii.gz'
+    if os.path.isfile(join(STRUCTDIR, "T1", part.split("_")[0]+".nii.gz")):
+        print('already there skipping')
+    else:
+        # Convert to Dicom
+        dicom2nifti.convert_directory(join(dicoms, part, mprage_f), join(STRUCTDIR, 'T1'), compression=True, reorient=True)
+        # rename to subject name
         os.system(f'mv {join(STRUCTDIR, "T1", outname)} {join(STRUCTDIR, "T1", part.split("_")[0])}.nii.gz')
 
 #%% FREESURFER RECON
-subnames_only = list(set([x.split('_')[0] for x in flist])) # get a unique list of IDs
-
-fs_recon_list = red_sourcespace_cmd.recon_all_multiple(sublist=subnames_only,
-                                                   struct_dir= struct_dir,
-                                                   fs_sub_dir=fs_sub_dir,
-                                                   fs_script_dir='/imaging/ai05/phono_oddball/fs_scripts',
+fs_recon_list = sourcespace_command_line.recon_all_multiple(sublist=ids,
+                                                   struct_dir= join(STRUCTDIR, "T1"),
+                                                   fs_sub_dir=join(STRUCTDIR, "FS_SUBDIR"),
+                                                   fs_script_dir='/imaging/ai05/RED/RED_MEG/resting/cluster_scripts',
                                                    fs_call='freesurfer_6.0.0',
                                                    njobs=1,
                                                    cbu_clust=True,

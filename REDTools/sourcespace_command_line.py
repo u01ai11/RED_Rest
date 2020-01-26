@@ -94,7 +94,7 @@ def __recon_all_qstat(sub, struct_dir, fs_sub_dir, fs_script_dir):
         The directory where freesurfer is storring it's recon files
 
     """
-    T1_name = sub + '_T1w.nii.gz'
+    T1_name = sub + '.nii.gz'
 
     # construct tcsh command
     qsub_com =\
