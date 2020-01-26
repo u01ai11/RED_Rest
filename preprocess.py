@@ -84,16 +84,20 @@ man_ica = [f for f in os.listdir(outdir) if 'no' in f]
 i = 0
 #%%
 i +=1
+print(f'{i+1} out of {len(man_ica)}')
 f = man_ica[i]
 raw = mne.io.read_raw_fif(f'{outdir}/{f}', preload=True)
 ica = mne.preprocessing.ICA(n_components=25, method='fastica').fit(raw)
 comps = ica.plot_components()
-raw.plot(start=120)
+comps[0].savefig('/home/ai05/comp1.png')
+comps[1].savefig('/home/ai05/comp2.png')
+raw.plot(start=120).savefig('/home/ai05/raw1.png')
+print(man_ica[i])
 #%% change inds and decide
-ica.exclude =[1,8,9,17]
+ica.exclude =[11, 20]
 ica.apply(raw)
 # if you need to plot the channels
-raw.plot(start=120)
+raw.plot(start=120).savefig('/home/ai05/raw2.png')
 #%%
 raw.save(f'{outdir}/{f.split("_")[0]}_{f.split("_")[1]}_clean_raw.fif', overwrite=True)
 #%%
