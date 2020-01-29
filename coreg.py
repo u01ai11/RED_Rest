@@ -52,14 +52,15 @@ coreg_list = []
 for REDid, MEGf, MRid in zip(RED_id, MEG_fname, MR_id):
     #check if coreg already exists
     #get filename
-    trans_f_name = join(STRUCTDIR, 'FS_SUBDIR', MR_id, 'bem', f'{MR_id}-trans.fif')
+    trans_f_name = join(STRUCTDIR, 'FS_SUBDIR', MRid, 'bem', f'{MR_id}-trans.fif')
     if os.path.isfile(trans_f_name): # if already existing
         print(f'{RED_id} already coregistered')
         coreg_list.append(trans_f_name)
         continue  # skip this one
 
     if MR_id != 'FSAVERAGE': # if participant has own MRI
-            mne.gui.coregistration(inst=join(RAWDIR, MEGf), subject=MR_id, subjects_dir=FS_SUBDIR, advanced_rendering=False)
+        mne.gui.coregistration(inst=join(RAWDIR, MEGf), subject=MRid, subjects_dir=FS_SUBDIR, advanced_rendering=False)
     else: # do fs average
-        mne.gui.coregistration(inst=join(RAWDIR, MEGf, subjects_dir=FS_SUBDIR,advanced_rendering=False)
+        mne.gui.coregistration(inst=join(RAWDIR, MEGf), subjects_dir=FS_SUBDIR,advanced_rendering=False)
+    
     coreg_list.append(trans_f_name)
