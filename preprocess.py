@@ -83,6 +83,7 @@ preprocess.preprocess_cluster(flist, indir, outdir, scriptpath, pythonpath ,over
 man_ica = [f for f in os.listdir(outdir) if 'no' in f]
 i = 0
 #%%
+raw.save(f'{outdir}/{f.split("_")[0]}_{f.split("_")[1]}_clean_raw.fif', overwrite=True)
 i +=1
 print(f'{i+1} out of {len(man_ica)}')
 f = man_ica[i]
@@ -94,10 +95,10 @@ comps[1].savefig('/home/ai05/comp2.png')
 raw.plot(start=120).savefig('/home/ai05/raw1.png')
 print(man_ica[i])
 #%% change inds and decide
-ica.exclude =[11, 20]
+ica.exclude =[1,7]
 ica.apply(raw)
 # if you need to plot the channels
 raw.plot(start=120).savefig('/home/ai05/raw2.png')
 #%%
-raw.save(f'{outdir}/{f.split("_")[0]}_{f.split("_")[1]}_clean_raw.fif', overwrite=True)
+
 #%%
