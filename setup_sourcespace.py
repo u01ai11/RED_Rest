@@ -89,13 +89,13 @@ print(f'{sum(status)/len(ids)*100}% recon-alls complete without errors')
 #%% make BEM model
 # get all participants who have a fs_dir and error-less logs from recon-all
 subs2do = np.array([f.split('/')[-1] for f in folders])[status]
-
+#%%
 # run run run run
 fs_recon_list = sourcespace_command_line.fs_bem_multiple(sublist=subs2do,
                                                 fs_sub_dir=join(STRUCTDIR, "FS_SUBDIR"),
                                                 fs_script_dir='/imaging/ai05/RED/RED_MEG/resting/cluster_scripts',
                                                 fs_call='freesurfer_6.0.0',
-                                                njobs=8,
+                                                njobs=1,
                                                 cbu_clust=True,
                                                 cshrc_path='/home/ai05/.cshrc')
 #%% Check the BEM model by saving images for each participant
@@ -108,3 +108,5 @@ for sub in subs2do:
                      orientation='coronal').savefig(join(BEM_DIAG_FOLDER, sub+'.png'))
 
 #%% Next we need to coregister our MEG data and MRI models. This has to be done manually, checkout coreg.py for this
+os.system('python coreg.py')
+#%% Now we have that we need to read in stuff to mne 
