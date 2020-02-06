@@ -47,4 +47,4 @@ def get_info():
                 MEG_fname.append(fname)
         except:
             print(tmp_row)
-        return RED_id, MR_id, MEG_fname
+    return RED_id, MR_id, MEG_fname
