@@ -10,7 +10,8 @@ import matplotlib.pyplot as plt
 sys.path.insert(0, '/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest')
 from REDTools import sourcespace_setup
 from REDTools import sourcespace_command_line
-
+from REDTools import study_info
+import joblib
 
 #%% Convert DICOM folder to nifti
 
@@ -21,6 +22,7 @@ from REDTools import sourcespace_command_line
 MP_name = 'Series005_CBU_MPRAGE_32chn'
 dicoms = '/imaging/rs04/RED/DICOMs'
 STRUCTDIR = '/imaging/ai05/RED/RED_MEG/resting/STRUCTURALS'
+MAINDIR = '/imaging/ai05/RED/RED_MEG/resting'
 folders = [f for f in os.listdir(dicoms) if os.path.isdir(os.path.join(dicoms,f))]
 ids = [f.split('_')[0] for f in folders]
 
@@ -109,4 +111,49 @@ for sub in subs2do:
 
 #%% Next we need to coregister our MEG data and MRI models. This has to be done manually, checkout coreg.py for this
 os.system('python coreg.py')
-#%% Now we have that we need to read in stuff to mne 
+#%% Now we have that we need to read in stuff to mne
+#get ids etc
+RED_id, MR_id, MEG_fname = study_info.get_info()
+
+mne_src_files = sourcespace_setup.setup_src_multiple(sublist=MR_id,
+                                                         fs_sub_dir=join(STRUCTDIR, 'FS_SUBDIR'),
+                                                         outdir=join(MAINDIR, 'src_space'),
+                                                         spacing='oct6',
+                                                         surface='white',
+                                                         src_mode='cortical',
+                                                         n_jobs1=14,
+                                                         n_jobs2=1)
+
+#%% Bem setup
+mne_bem_files = sourcespace_setup.make_bem_multiple(sublist=MR_id,
+                                                        fs_sub_dir=join(STRUCTDIR, 'FS_SUBDIR'),
+                                                        outdir=join(MAINDIR, 'bem'),
+                                                        single_layers=True,
+                                                        n_jobs1=20)
+
+#%%
+def src2inverse(i):
+    #setup source space
+    if os.path.isfile(join(MAINDIR, 'inverse_ops', f'{RED_id[i]}-inv.fif')):
+        return
+
+    src_spc = mne.read_source_spaces(join(MAINDIR, 'src_space',f'{MR_id[i]}_white-oct6-cortical-src.fif'))
+    bem_s = mne.read_bem_solution(join(MAINDIR, 'bem', f'{MR_id[i]}-5120-5120-5120-single-bem-sol.fif'))
+    # get the trans file
+    trans_f = join(MAINDIR, 'coreg', f'{RED_id[i]}-trans.fif')
+    #load raw file
+    raw = mne.io.read_raw_fif(join(MAINDIR, 'preprocessed', MEG_fname[i]))
+    #compute fwd solution
+    fwd = mne.make_forward_solution(raw.info, trans_f, src_spc, bem_s)
+    #compute covariance matrix
+    cov = mne.compute_raw_covariance(raw)
+    #make fixed length epochs on reting data
+    events = mne.make_fixed_length_events(raw, duration=5.)
+    epochs = mne.Epochs(raw, events=events, tmin=0, tmax=5.,
+                        baseline=None, preload=True)
+    #inverse operator
+    inv = mne.minimum_norm.make_inverse_operator(epochs.info, fwd, cov)
+    mne.minimum_norm.write_inverse_operator(join(MAINDIR, 'inverse_ops', f'{RED_id[i]}-inv.fif'), inv)
+
+joblib.Parallel(n_jobs=10)(
+            joblib.delayed(src2inverse)(i) for i in range(len(MR_id)))
