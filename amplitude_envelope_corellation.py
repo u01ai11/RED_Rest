@@ -174,7 +174,103 @@ for i in range(len(freq_labels)):
                              node_angles=node_angles, node_colors=label_colors,
                              title=f'{freq_labels[i]} All-to-All Connectivity')[0].savefig(f'/imaging/ai05/images/AEC_{freq_labels[i]}_circle.png')
 
+#%% Meeting notes from 6/2/2019
+#Continous concetantion, downsample after hilbert envelope
+#kanads method section of PhD -- threshold free level setting (singular value decomposition)
+#
 
-// Continous concetantion, downsample after hilbert envelope
-// kanads method section of PhD -- threshold free level setting (singular value decomposition)
-//
+#%% source recon continous raw data
+pythonpath = '/home/ai05/.conda/envs/mne_2/bin/python'
+for i in range(len(RED_id)):
+    pycom = f"""
+import sys
+import os
+from os.path import join
+import numpy as np
+import mne
+sys.path.insert(0, '/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest')
+from REDTools import study_info
+
+MP_name = 'Series005_CBU_MPRAGE_32chn'
+dicoms = '/imaging/rs04/RED/DICOMs'
+STRUCTDIR = '/imaging/ai05/RED/RED_MEG/resting/STRUCTURALS'
+MAINDIR = '/imaging/ai05/RED/RED_MEG/resting'
+folders = [f for f in os.listdir(dicoms) if os.path.isdir(os.path.join(dicoms,f))]
+ids = [f.split('_')[0] for f in folders]
+
+#get ids etc
+RED_id, MR_id, MEG_fname = study_info.get_info()
+
+def raw2source(meg_f, inv_op, method, outdir):
+    raw = mne.io.read_raw_fif(meg_f, preload=True)
+    inv = mne.minimum_norm.read_inverse_operator(inv_op)
+    start, stop = raw.time_as_index([60, raw.times[-30000]])
+    stc = mne.minimum_norm.apply_inverse_raw(raw, inv,
+                                             lambda2=1.0/1.0**2,
+                                             method=method,
+                                             start=start,
+                                             stop=stop,
+                                             buffer_size=int(len(raw.times)/10))
+    np.save(join(outdir, f'{{os.path.basename(meg_f).split("_")[0]}}_{{method}}_stc_data.npy'),stc.data)
+    np.save(join(outdir, f'{{os.path.basename(meg_f).split("_")[0]}}_{{method}}_stc_vertices.npy'),stc.vertices)
+    np.save(join(outdir, f'{{os.path.basename(meg_f).split("_")[0]}}_{{method}}_stc_times.npy'),stc.times)
+
+invdir = join(MAINDIR, 'inverse_ops')
+rawdir = join(MAINDIR, 'preprocessed')
+fsdir = join(MAINDIR, 'STRUCTURALS','FS_SUBDIR')
+meg_f = join(rawdir, MEG_fname[{i}])
+inv_op = join(invdir, f'{{RED_id[{i}]}}-inv.fif')
+outdir = join(MAINDIR, 'raw_stcs')
+method = 'MNE'
+raw2source(meg_f, inv_op, method,outdir)
+    """
+
+    # save to file
+    print(pycom, file=open(join(MAINDIR, 'cluster_scripts', f'{i}_aec.py'), 'w'))
+
+    # construct csh file
+    tcshf = f"""#!/bin/tcsh
+            {pythonpath} {join(MAINDIR, 'cluster_scripts', f'{i}_aec.py')}
+                    """
+    # save to directory
+    print(tcshf, file=open(join(MAINDIR, 'cluster_scripts', f'{i}_aec.csh'), 'w'))
+
+    # execute this on the cluster
+    os.system(f"sbatch --job-name=AmpEnvConnect_{i} --mincpus=2 --mem-per-cpu=40G -t 0-1:00 {join(MAINDIR, 'cluster_scripts', f'{i}_aec.csh')}")
+
+#%% Read in a file
+from scipy.signal import hilbert, resample
+import scipy as ss
+i = 10
+outdir = join(MAINDIR, 'raw_stcs')
+method = 'MNE'
+data = np.load(join(outdir, f'{os.path.basename(MEG_fname[i]).split("_")[0]}_{method}_stc_data.npy'))
+#%% Calculate the hilbert envelope for all the voxels and save downsampled version
+downsample_factor = 100
+#analytic_signal = np.zeros((data.shape[0], int(data.shape[1]/downsample_factor)))
+analytic_signal = np.zeros(data.shape)
+for i in range(data.shape[0]):
+    tmp_sig = hilbert(data[i,:])
+    #analytic_signal[i,:] = resample(tmp_sig, int(data.shape[1]/downsample_factor))
+    analytic_signal[i,:] = tmp_sig
+    print(i/data.shape[0])
+
+#%% downsample
+ii = 1
+#plot some stuff
+fig, ax = plt.subplots(1)
+
+section = data[ii,0:4000]
+
+section = mne.filter.filter_data(section,1000,freqs['Alpha'][0], freqs['Alpha'][1])
+#get number of fft
+n_fft = mne.filter.next_fast_len(len(section))
+env = hilbert(section,N=n_fft, axis =-1)
+d_env = resample(np.abs(env),int(len(env)/25))
+d_sec = resample(section,int(len(section)/25))
+#ax.plot(section[1000:5000])
+#ax.plot(np.abs(env)[1000:5000])
+#ax.plot(section)
+ax.plot(d_sec)
+ax.plot(d_env)
+fig.savefig('/home/ai05/test.png')

@@ -131,29 +131,3 @@ mne_bem_files = sourcespace_setup.make_bem_multiple(sublist=MR_id,
                                                         single_layers=True,
                                                         n_jobs1=20)
 
-#%%
-def src2inverse(i):
-    #setup source space
-    if os.path.isfile(join(MAINDIR, 'inverse_ops', f'{RED_id[i]}-inv.fif')):
-        return
-
-    src_spc = mne.read_source_spaces(join(MAINDIR, 'src_space',f'{MR_id[i]}_white-oct6-cortical-src.fif'))
-    bem_s = mne.read_bem_solution(join(MAINDIR, 'bem', f'{MR_id[i]}-5120-5120-5120-single-bem-sol.fif'))
-    # get the trans file
-    trans_f = join(MAINDIR, 'coreg', f'{RED_id[i]}-trans.fif')
-    #load raw file
-    raw = mne.io.read_raw_fif(join(MAINDIR, 'preprocessed', MEG_fname[i]))
-    #compute fwd solution
-    fwd = mne.make_forward_solution(raw.info, trans_f, src_spc, bem_s)
-    #compute covariance matrix
-    cov = mne.compute_raw_covariance(raw)
-    #make fixed length epochs on reting data
-    events = mne.make_fixed_length_events(raw, duration=5.)
-    epochs = mne.Epochs(raw, events=events, tmin=0, tmax=5.,
-                        baseline=None, preload=True)
-    #inverse operator
-    inv = mne.minimum_norm.make_inverse_operator(epochs.info, fwd, cov)
-    mne.minimum_norm.write_inverse_operator(join(MAINDIR, 'inverse_ops', f'{RED_id[i]}-inv.fif'), inv)
-
-joblib.Parallel(n_jobs=10)(
-            joblib.delayed(src2inverse)(i) for i in range(len(MR_id)))
