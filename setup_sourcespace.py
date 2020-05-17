@@ -120,7 +120,7 @@ mne_src_files = sourcespace_setup.setup_src_multiple(sublist=MR_id,
                                                          outdir=join(MAINDIR, 'src_space'),
                                                          spacing='oct6',
                                                          surface='white',
-                                                         src_mode='cortical',
+                                                         src_mode='volume',
                                                          n_jobs1=14,
                                                          n_jobs2=1)
 
@@ -131,3 +131,37 @@ mne_bem_files = sourcespace_setup.make_bem_multiple(sublist=MR_id,
                                                         single_layers=True,
                                                         n_jobs1=20)
 
+#%% Compute covariance, forward model etc
+fs_subdir = join(STRUCTDIR, "FS_SUBDIR")
+i = 0
+raw = mne.io.read_raw_fif(join(MAINDIR, 'preprocessed', MEG_fname[i]))
+cov = mne.compute_raw_covariance(raw)
+trans = join(MAINDIR, 'coreg', f'{RED_id[i]}-trans.fif')
+bem = join(MAINDIR, 'bem', f'{MR_id[i]}-5120-5120-5120-single-bem-sol.fif')
+#
+src = mne.setup_volume_source_space(MR_id[i], subjects_dir=fs_subdir,pos=8.0)
+
+
+fwd = mne.make_forward_solution(raw.info, trans, src, bem)
+inv = mne.minimum_norm.make_inverse_operator(raw.info, fwd, cov)
+
+events = mne.make_fixed_length_events(raw, duration=10)
+epochs = mne.Epochs(raw, events=events, tmin=0, tmax=10,
+                    baseline=None, preload=True)
+
+stcs = mne.minimum_norm.apply_inverse_epochs(epochs[5:6], inv, lambda2=1. / 9.,
+                            return_generator=False)
+img = stcs[0].as_volume(src,
+                    mri_resolution=False)  # set True for full MRI resolution
+
+
+# Save it as a nifti file
+# nib.save(img, 'mne_%s_inverse.nii.gz' % method)
+
+t1_fname = mri='/home/ai05/osl/std_masks/MNI152_T1_8mm_brain.mgz'
+from nilearn.plotting import plot_stat_map
+from nilearn.image import index_img
+
+# Plotting with nilearn ######################################################
+mne.viz.plot_stat_map(index_img(img, 61), t1_fname, threshold=8.,
+              title='%s (t=%.1f s.)' % ('dspm', stcs[0].times[61]))

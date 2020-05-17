@@ -48,10 +48,10 @@ parc = 'aparc'
 time_course_mode = 'mean'
 
 #frequencies we are gonna do
-freqs = {'Theta':(4,7),
-         'Alpha':(8,12),
-         'Lower Beta': (13, 20),
-         'Upper Beta':(21, 30)}
+freqs = {'Theta_s':(4,7),
+         'Alpha_s':(8,12),
+         'Lower Beta_s': (13, 20),
+         'Upper Beta_s':(21, 30)}
 
 # make list of dicts for input (we're gonna use job lib for this)
 dictlist = []
@@ -80,6 +80,8 @@ for f in freqs:
 joblib.Parallel(n_jobs=len(dictlist))(
     joblib.delayed(connectivity.envelope_corellation)(indict) for indict in dictlist)
 
+#%% or instead use cluster version
+connectivity.cluster_envelope_corellation(MR_id, MAINDIR)
 
 #%% Calculate average corellation matrix for each brain
 aec_dir = join(MAINDIR, 'envelope_cors')
@@ -104,26 +106,39 @@ for band in [thetas, alphas, betalow, betahigh]:
 
 #%% make a basic average array for one frequency
 freq_labels = ['thetas', 'alphas', 'betalow', 'betahigh']
-threshold = 0.12
+threshold = 0.05 # threshold for strength
+perc_part = 0.70 # Threshold for how many participants
 for i in range(len(freq_labels)):
     thisarray = arraylist[i]
     corr = thisarray.mean(axis=2) # simple mean
     # try thresholding per participants
     bools = thisarray > threshold # where we are above threshold
-    chn_mask = np.zeros(thisarray.shape[0:2])
-    for i in range(thisarray.shape[0]): #channels where all participants above threshold
-        for ii in range
+    chn_mask = np.zeros(thisarray.shape[0:2], dtype=bool)
+    corr_masked = np.zeros(thisarray.shape[0:2])
+    for ii in range(thisarray.shape[0]): #channels where perce participants above threshold
+        for iii in range(thisarray.shape[1]):
+            perc = sum(bools[ii,iii])/len(bools[ii,iii])
+            print(perc)
+            if perc < perc_part:
+                chn_mask[ii,iii] = False
+                corr_masked[ii,iii] = 0
+            else:
+                chn_mask[ii,iii] = True
+                corr_masked[ii,iii] = corr[ii,iii]
+    corr2plot = corr_masked
+    nlines=300
+
     #% plot corellation matrix
     # let's plot this matrix
     fig, ax = plt.subplots(figsize=(4, 4))
-    ax.imshow(corr, cmap='viridis', clim=np.percentile(corr, [5, 95]))
+    ax.imshow(corr2plot, cmap='viridis', clim=np.percentile(corr, [5, 95]))
     fig.tight_layout()
     plt.savefig(f'/imaging/ai05/images/AEC{freq_labels[i]}_group_mat.png')
 
     #% plot this on a brain
     threshold_prop = 0.3  # percentage of strongest edges to keep in the graph
     #degree = mne.connectivity.degree(corr, threshold_prop=threshold_prop) # get the degree
-    degree = mne.connectivity.degree(corr) # get the degree
+    degree = mne.connectivity.degree(corr2plot) # get the degree
     #load in FSAVERAGE for parcellations and inverse for plotting
     labels = mne.read_labels_from_annot('fsaverage_1', parc='aparc',
                                         subjects_dir=join(MAINDIR, 'STRUCTURALS','FS_SUBDIR'))
@@ -170,9 +185,34 @@ for i in range(len(freq_labels)):
     label_colors = [label.color for label in labels]
     # Plot the graph using node colors from the FreeSurfer parcellation. We only
     # show the 300 strongest connections.
-    mne.viz.plot_connectivity_circle(corr, label_names, n_lines=300,
+    mne.viz.plot_connectivity_circle(corr2plot, label_names, n_lines=nlines,
                              node_angles=node_angles, node_colors=label_colors,
-                             title=f'{freq_labels[i]} All-to-All Connectivity')[0].savefig(f'/imaging/ai05/images/AEC_{freq_labels[i]}_circle.png')
+                             title=f'{freq_labels[i]}')[0].savefig(f'/imaging/ai05/images/AEC_{freq_labels[i]}_circle.png')
+
+    plotting.plot_connectome(corr_masked, coords,
+                             edge_threshold="95%",
+                             title=f'{freq_labels[i]}').savefig(f'/imaging/ai05/images/AEC_{freq_labels[i]}net.png')
+#%% vertex to MNI space
+coords = []
+for i in range(len(labels)):
+    if 'lh' in label_names[i]:
+        hem = 1
+    else:
+        hem = 0
+    coord = mne.vertex_to_mni(labels[i].center_of_mass(subjects_dir=fsdir), subject='fsaverage_1',hemis=hem,subjects_dir=fsdir)
+    coords.append(coord[0])
+#%% nii learn plots
+from nilearn import datasets
+from nilearn.input_data import NiftiLabelsMasker
+from nilearn import plotting
+des = datasets.fetch_atlas_surf_destrieux()
+# create masker to extract functional data within atlas parcels
+masker = NiftiLabelsMasker(labels_img=labels, standardize=True,
+                           memory='nilearn_cache')
+coordinates = plotting.find_parcellation_cut_coords(labels_img='/imaging/ai05/RED/RED_MEG/resting/analysis/aparcaseg.nii.gz')
+
+
+
 
 #%% Meeting notes from 6/2/2019
 #Continous concetantion, downsample after hilbert envelope
@@ -274,3 +314,30 @@ d_sec = resample(section,int(len(section)/25))
 ax.plot(d_sec)
 ax.plot(d_env)
 fig.savefig('/home/ai05/test.png')
+
+#%% convert example into MNI space
+i = 0
+
+def mni_conv(i):
+    inv_op = mne.minimum_norm.read_inverse_operator(join(invdir, f'{RED_id[i]}-inv.fif'))
+    # get raw file
+    raw = mne.io.read_raw_fif(join(rawdir, MEG_fname[i]), preload=False)
+    events = mne.make_fixed_length_events(raw, duration=10.)
+    epochs = mne.Epochs(raw, events=events, tmin=0, tmax=10.,
+                        baseline=None, preload=True)
+    del raw
+    epochs = epochs[0:1]
+    # invert the eopchs
+    stcs = mne.minimum_norm.apply_inverse_epochs(epochs, inv_op,
+                                                 lambda2=lambda2,
+                                                 pick_ori=pick_ori,
+                                                 method=method)
+    stc = stcs[0]
+    del stcs
+    mni = mne.vertex_to_mni(stc.vertices, [0,1], MR_id[i], subjects_dir=fsdir) # mni space
+    mni = np.vstack([mni[0], mni[1]]) # stack
+    outdir = join(MAINDIR, 'mni_coords')
+    np.save(join(outdir, f'{os.path.basename(MEG_fname[i]).split("_")[0]}_mni.npy'),mni)
+
+joblib.Parallel(n_jobs=15)(
+    joblib.delayed(mni_conv)(i) for i in range(len(MEG_fname)))

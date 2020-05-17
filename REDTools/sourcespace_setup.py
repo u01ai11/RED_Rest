@@ -42,6 +42,7 @@ def setup_src_multiple(sublist, fs_sub_dir, outdir, spacing, surface, src_mode,n
     return saved_files
 
 
+
 def __setup_src_individual(sub, fs_sub_dir, outdir, spacing, surface, src_mode, njobs):
     """
     :param sub:
@@ -65,8 +66,7 @@ def __setup_src_individual(sub, fs_sub_dir, outdir, spacing, surface, src_mode, 
         if src_mode == 'cortical':
             src_space = mne.setup_source_space(sub, spacing=spacing, surface=surface, subjects_dir=fs_sub_dir, n_jobs=njobs)
         elif src_mode == 'volume':
-            src_space = mne.setup_volume_source_space(sub, subjects_dir=fs_sub_dir)
-
+            src_space = mne.setup_volume_source_space(sub, subjects_dir=fs_sub_dir,pos=8.0)
         else:
             print(src_mode + ' is not a valid source space')
             return ''
@@ -166,4 +166,40 @@ def __make_bem_individual(sub, fs_sub_dir, outdir, single_layers):
     bem_sol = mne.make_bem_solution(model)  # make bem solution using model
     mne.write_bem_solution(solname, bem_sol) # save as well to the outdir
     return solname
+
+
+
+def make_inv_multiple(rawfs, transfs, bemfs, srcfs, outdir, njobs):
+
+    saved_files = []
+
+    if njobs == 1:
+        for i in range(len(rawfs)):
+            savedfile = __make_inv_individual(rawfs[i], transfs[i], bemfs[i], srcfs[i], outdir)
+            saved_files.append(savedfile)
+    if njobs > 1:
+
+        saved_files = joblib.Parallel(n_jobs=njobs)(
+            joblib.delayed(__make_inv_individual)(raw, tran, bem, src, outdir) for raw, tran, bem, src in zip(rawfs, transfs, bemfs, srcfs))
+
+    return saved_files
+
+def __make_inv_individual(rawf, transf, bemf, srcf, outdir):
+
+    tmpid = os.path.basename(rawf).split("_")[0]
+    tmpath = f'{outdir}/{tmpid}_inv.fif'
+
+    if os.path.isfile(tmpath):
+        print(f'{tmpid}_inv.fif already exists, skipping')
+        return tmpath
+    raw = mne.io.read_raw_fif(rawf)
+    cov = mne.compute_raw_covariance(raw)
+    src = mne.read_source_spaces(srcf)
+    bem = mne.read_bem_solution(bemf)
+    fwd = mne.make_forward_solution(raw.info, transf, src, bem)
+    inv = mne.minimum_norm.make_inverse_operator(raw.info, fwd, cov)
+    del fwd, src
+
+    mne.minimum_norm.write_inverse_operator(f'{outdir}/{tmpid}_inv.fif',inv)
+    return tmpath
 

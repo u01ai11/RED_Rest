@@ -1,0 +1,15 @@
+import sys
+from os import listdir as listdir
+from os.path import join
+import scipy as ss
+import numpy as np
+from scipy.io import loadmat
+#%%
+str_path = join('/imaging', 'ai05', 'RED', 'RED_MEG', 'resting', 'Structural_connectomes')
+red = loadmat(join(str_path, 'red_data68.mat'))
+ace = loadmat(join(str_path, 'amy_data68.mat'))
+red_stackdat = red['stackdata68']
+ace_stackdat = ace['stackdata68']
+f= open(join(str_path, 'info.txt'), "r")
+stack_labels =f.read().split("\n")
+f.close()

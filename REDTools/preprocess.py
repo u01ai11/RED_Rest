@@ -3,7 +3,7 @@ import os
 import numpy as np
 import joblib
 import matplotlib.pyplot as plt
-
+import re
 def preprocess_multiple(flist, indir, outdir, overwrite, njobs):
     """ Takes a list of raw files and preprocesses them
     Parameters
@@ -250,6 +250,7 @@ def plot_MaxLog(logpath, outpath, plot=False):
 
     #get just the lines starting with #t
     pos_only = [f for f in lines if f[0:2] == '#t']
+    import re
     p = re.compile("\d+\.\d+")
 
     ts = [float(p.findall(f)[0]) for f in pos_only] # time (seconds)
@@ -257,13 +258,13 @@ def plot_MaxLog(logpath, outpath, plot=False):
     gs = [float(p.findall(f)[2]) for f in pos_only] # goodness of fit
     vs = [float(p.findall(f)[3]) for f in pos_only] # translation (cm/s)
     rs = [float(p.findall(f)[4]) for f in pos_only] # rotation (rd/s)
-    ds = [float(p.findall(f)[5]) for f in pos_only] # drift (cm)
+    #ds = [float(p.findall(f)[5]) for f in pos_only] # drift (cm)
 
     # labels
-    labels = ['Fitting Error (cm)', 'Goodness of Fit', 'Translation (cm/s)', 'Rotation (Rads/s)', 'Drift (cm)']
+    labels = ['Fitting Error (cm)', 'Goodness of Fit', 'Translation (cm/s)', 'Rotation (Rads/s)']
     if plot:
         plt.close('all')
-        objs = plt.plot(ts,es,ts,gs,ts,vs,ts,rs,ts,ds)
+        objs = plt.plot(ts,es,ts,gs,ts,vs,ts,rs)
         plt.legend(iter(objs), labels)
         plt.title(os.path.basename(logpath))
         plt.savefig(os.path.join(outpath,os.path.basename(logpath).split('.')[0]+'.png'))
@@ -271,5 +272,5 @@ def plot_MaxLog(logpath, outpath, plot=False):
     # return np.array([[np.mean(es), np.mean(gs), np.mean(vs), np.mean(rs), np.mean(ds)],
     #         [np.std(es), np.std(gs), np.std(vs), np.std(rs), np.std(ds)]
     #         ])
-    summary = np.array([es,gs,vs,rs,ds])
+    summary = np.array([es,gs,vs,rs])
     return summary
