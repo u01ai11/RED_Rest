@@ -140,28 +140,122 @@ for i, sub in enumerate(nMEG_id):
 #first only use participants with both full connectomes
 
 # get inputs
-in_struct = struct_main[is_data_nan, 4, :,:]
+in_struct = struct_main[is_data_nan, 0, :,:]
 in_func = mat_3d[is_data_nan,:,:]
-
+#in_func = struct_main[is_data_nan, 4, :,:]
 # functional MEG connectomes are pretty dense, so do some thresholding
+# let's take the top X percentage of connections
+percentile = 90
 
-binary_matched = np.full((in_func.shape[0:2]), False)
-euc_distances = np.zeros(in_func.shape)
+# or we can use density base thresholding
+# i.e. number of nonzero connections divided by all possible connections
+# first choose a threshold for removal and remove
+
+
+def calc_density(matrix):
+    rem_self =  matrix- np.diag(np.diag(matrix))
+    return np.count_nonzero(rem_self)/np.prod(rem_self.shape)
+
+def permute_connections(m):
+
+    """Permutes the connection weights in a sparse 2D matrix. Keeps the
+    location of connections in place, but permutes their strengths.
+
+    Arguments
+
+    m       -   numpy.ndarray with a numerical dtype and shape (N,N) where N
+                is the number of nodes. Lack of connection should be denoted
+                by 0, and connections should be positive or negative values.
+
+    Returns
+
+    perm_m  -   numpy.ndarray of shape (N,N) with permuted connection weights.
+    """
+
+    # Verify the input.
+    if len(m.shape) != 2:
+        raise Exception("Connection matrix `m` should be 2D")
+    if m.shape[0] != m.shape[1]:
+        raise Exception("Connection matrix `m` should be symmetric")
+
+    # Copy the original matrix to prevent modifying it in-place.
+    perm_m = np.copy(m)
+
+    # Get the indices to the lower triangle.
+    i_low = np.tril_indices(perm_m.shape[0], -1)
+
+    # Create a flattened copy of the connections.
+    flat_m = perm_m[i_low]
+
+    # Shuffle all non-zero connections.
+    nonzero = flat_m[flat_m != 0]
+    np.random.shuffle(nonzero)
+    flat_m[flat_m != 0] = nonzero
+
+    # Place the shuffled connections over the original connections in the
+    # copied matrix.
+    perm_m[i_low] = flat_m
+
+    # Copy lower triangle to upper triangle to make the matrix symmertical.
+    perm_m.T[i_low] = perm_m[i_low]
+
+    return perm_m
+
+density_S = [calc_density(f) for f in in_struct]
+
+# get copy
+in_c = in_func.copy()
+
+
+start_t = 0.07 # start threshold
+step = 0.0001 # start step
+
+# target density to match input
+target_density = np.mean(density_S)
+
+for i in range(1000): # iterations
+    tmp_c = in_c.copy() # make copy
+    for ii in range(in_c.shape[0]): # participants
+        tmp_c[ii][tmp_c[ii,:,:] < start_t] = 0
+    # calc density
+    mean_density = np.mean([calc_density(f) for f in tmp_c])
+
+    if mean_density > target_density:
+        start_t += step
+    else:
+        start_t -= step
+
+    print(mean_density)
+
+#use tmp_c as the real
+in_func = tmp_c
+
+#initialise empty arrays
+binary_matched = np.full((in_func.shape[0:2]), False) # an array for just the node accuracy
+euc_distances = np.zeros(in_func.shape) # for all the euclidean distances
+binary_matched_matrix = np.zeros(in_func.shape, dtype=int)
 
 for p in range(in_func.shape[0]):
     print(p)
-    # Here we just use  participant
+    # Here we just use one participant
     this_structural = in_struct[p, :,:]
-    #this_functional = in_struct[p, 7, :,:]
     this_functional = in_func[p,:,:]
 
-    # deal with NaN and infinte values
-    this_structural = np.nan_to_num(this_structural)
+
+    # Make functional pretty sparse
+
+    # # Simple percentage thresholding
+    # thresh = np.percentile(this_functional, percentile)
+    # this_functional[this_functional<thresh] = 0
+
 
     # z score both
     this_structural = ss.zscore(this_structural)
     this_functional = ss.zscore(this_functional)
 
+    # deal with NaN and infinte values
+    this_structural = np.nan_to_num(this_structural)
+    this_functional = np.nan_to_num(this_functional)
     # Step 1, feature vector for each node, containing connectivity for each over parcellation in graph
     # For each graph func and struct
 
@@ -182,11 +276,75 @@ for p in range(in_func.shape[0]):
     # is considered accurate (i.e. a 1) anything else is a 0
     binary_nodes = np.array([i == j for i, j in zip(match_inds[0], match_inds[1])])
 
+    # Make this in 2D as well
+    binary_match_mat = np.zeros(this_structural.shape, dtype=int) # intialise empty
+    for i, row in enumerate(binary_match_mat): # loop through rows/nodes
+        row[match_inds[1][i]] = 1 # place a 1 in the corresponding column where it matched
+
     # add to group level matrices
-    binary_matched[i,:] = binary_nodes
+    binary_matched[p,:] = binary_nodes
     print(binary_nodes.sum())
-    euc_distances[i,:,:] = cost_euc
+    binary_matched_matrix[p,:,:] = binary_match_mat
+    euc_distances[p,:,:] = cost_euc
 
 # Step 5, repeat for all participants and average to give a probability for each node
 
+nodes_freq = binary_matched.mean(axis=0) # percentage of users with correctly matched nodes
+nodes_freq_matrix = binary_matched_matrix.mean(axis=0) # all node combination matching weights
 
+# plotting results
+
+#%% setup brain glassbrain bits
+labels = mne.read_labels_from_annot('fsaverage_1', parc='aparc',
+                                    subjects_dir=join(MAINDIR,'FS_SUBDIR'))
+labels = labels[0:-1]
+label_names = [label.name for label in labels]
+coords = []
+# TODO: Find a better way to get centre of parcel
+#get coords of centre of mass
+for i in range(len(labels)):
+    if 'lh' in label_names[i]:
+        hem = 1
+    else:
+        hem = 0
+    coord = mne.vertex_to_mni(labels[i].center_of_mass(subjects_dir=join(MAINDIR,'FS_SUBDIR')), subject='fsaverage_1',hemis=hem,subjects_dir=join(MAINDIR,'FS_SUBDIR'))
+    coords.append(coord[0])
+
+#%%
+plt.close('all')
+fig, axs = plt.subplots(nrows=1, ncols=3) # two plots
+
+# plot the matrix
+pos = axs[0].imshow(nodes_freq_matrix, cmap= plt.cm.YlOrRd)
+fig.colorbar(pos, ax=axs[0])
+axs[0].set_xlabel('MEG Nodes')
+axs[0].set_ylabel('MRI Nodes')
+axs[0].set_title('Node Matching between MRI and MEG Graphs')
+# plot each nodes frequency for matching
+
+#we need to fake a connectome to use niilearns built in plotting functions
+#first make a fake connectome from the vector, with each node having one connection with strength f its frequency
+fake_connect = np.zeros((len(nodes_freq), len(nodes_freq))) # intialise empty
+for i, row in enumerate(fake_connect): # loop through rows/nodes
+    row[i] = nodes_freq[i]
+plotting.plot_connectome_strength(fake_connect,
+                         node_coords=coords,
+                         title='Parcellation Matching Accuracy',
+                         figure=fig,
+                         axes=axs[1],
+                         cmap=plt.cm.YlOrRd)
+
+# Calculate label names for 10% most matching ROIs
+top_percentile = np.percentile(nodes_freq, 90)
+top_labels = np.array(label_names)[nodes_freq > top_percentile]
+top_vals = nodes_freq[nodes_freq > top_percentile]
+top_vals = top_vals.round(3).astype(str)
+to_table = [top_vals.tolist(), top_labels.tolist()]
+rotated = list(zip(*to_table[::-1]))
+table = axs[2].table(rotated, loc=9)
+table.auto_set_font_size(False)
+table.set_fontsize(12)
+
+
+fig.set_size_inches(22.0, 6)
+fig.savefig('/imaging/ai05/images/net_matching.png')
