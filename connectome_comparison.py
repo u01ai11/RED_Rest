@@ -113,27 +113,6 @@ for i, megid in enumerate([f.replace('-', '_') for f in nMEG_id]):
     struct_main[i,:,:] = np.array(tmp_main)
 
 
-#%% for each subject calculate difference from structural to functional
-
-#%% options for this are complicated:
-# - Singular Value Decomposition, the absolute SVD for two identical matrices will be the same
-#   , so the difference between them gives a coarse idea of differences
-differences_weighted = []
-differences_binarized = []
-bin_thresh = 95
-
-struct_ind = 0
-
-bfunc= np.array([mat > np.percentile(mat, bin_thresh) for mat in mat_3d], dtype=int)
-bstruc= np.array([mat > np.percentile(mat, bin_thresh) for mat in struct_main[:, struct_ind, :,:]], dtype=int)
-
-for i, sub in enumerate(nMEG_id):
-    if is_data_nan[i] == False:
-        differences_weighted.append(np.nan)
-        differences_binarized.append(np.nan)
-    else:
-        difference = np.abs(svd(bstruc[i, :,:])[1].sum() - svd(bfunc[i, :,:])[1].sum())
-        differences_binarized.append(difference)
 
 #%% Use inexact graph matching algorithms to calculate node-to-node similarity (Osmanlioglu et al 2019)
 
@@ -229,11 +208,22 @@ for i in range(1000): # iterations
 
 #use tmp_c as the real
 in_func = tmp_c
+#%%
 
+
+graph_1 = in_struct
+graph_2 = match_density(in_func, graph_1, 0.7, 0.0001,1000)
+
+matching = match_graphs(graph_1, graph_2, 20)
+
+null = generate_null_dist(graph_1, graph_2, 10, 10)
+
+#%%
 #initialise empty arrays
 binary_matched = np.full((in_func.shape[0:2]), False) # an array for just the node accuracy
 euc_distances = np.zeros(in_func.shape) # for all the euclidean distances
 binary_matched_matrix = np.zeros(in_func.shape, dtype=int)
+
 
 for p in range(in_func.shape[0]):
     print(p)
