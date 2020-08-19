@@ -108,9 +108,7 @@ def surrogate_MVAR(perm, ind, type, modes, filter, outdir, parcel_dir, parcel_fi
         X_fft = np.fft.rfft(X[0], axis=1)
         np.save(join(outdir, f'fft_{type}_{id_}.npy'),X_fft)
     else:
-
-
-        X_fft = np.load(f'fft_{type}_{id_}.npy')
+        X_fft = np.load(join(outdir, f'fft_{type}_{id_}.npy'))
 
     # shuffle phases
     #  Get shapes
