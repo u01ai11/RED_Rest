@@ -5,6 +5,7 @@ from os.path import isfile
 import numpy as np
 import matplotlib.pyplot as plt
 sys.path.insert(0, '/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest')
+from REDTools import dynamics
 import mne
 import sails
 import glmtools
@@ -175,53 +176,10 @@ ax[1].plot(welch[0], compare_spectrum[1])
 plt.savefig(join(figdir, f'compare_spectra_parcel_{parcel_ind}_{mod}_delays_{delays}.png'))
 plt.close(f)
 #%% looks like 20 is probably an acceptable number of modes
-
-# put the calculation in a function
-def MVAR_single(ind, type, modes, filter, outdir, parcel_dir, parcel_files):
-
-    #id
-    id_ = parcel_files[ind].split('_')[0]
-    if isfile(join(outdir, f'mvar_{type}_{id}.npy')):
-        print('file exists, skipping')
-        return
-    X = np.load(join(parcel_dir, parcel_files[ind]))
-
-    if filter == 'notch':
-        X = mne.filter.notch_filter(X, Fs=150, freqs=np.arange(50, 75, 50))
-    elif type(filter) == tuple:
-        # we also probably want to filter our data slightly (use FIR)
-        X = mne.filter.filter_data(X, sfreq=150, l_freq=filter[0], h_freq=filter[1])
-    else:
-        print(f'{filter} is an unrecognised filter')
-        return
-
-    if len(X.shape) == 1:
-        print('not correct data input, skipping')
-        return
-    #reshape as sails expects (nsignals, nsamples, ntrials)
-    X = X.transpose([1,2,0])
-    # create delay vector from modes
-    delay_vect = np.arange(modes)
-
-    # apply model
-    if type == 'OLS':
-        m = sails.OLSLinearModel.fit_model(X, delay_vect)
-    elif type == 'VieiraMorf':
-        m = sails.VieiraMorfLinearModel.fit_model(X, delay_vect)
-    # get fourier decomp of model coefficients
-    Fo = sails.mvar_metrics.FourierMvarMetrics.initialise(m, sample_rate, freq_vect)
-    # save to file
-    # get name
-    np.save(join(outdir, f'mvar_{type}_{id}.npy'),Fo.directed_transfer_function)
-    return Fo, m
-
-
-#Fo, m = MVAR_single(5, 'OLS', 20, (1,30), join(root_dir,'resting', 'MVAR'))
-
 # loop through this and do for all participants in parallel
 joblib.Parallel(n_jobs =20)(
-    joblib.delayed(MVAR_single)(i,'OLS',25, 'notch', join(root_dir,'resting', 'MVAR'),
-                                parcel_dir, parcel_files) for i in range(len(parcel_files)))
+    joblib.delayed(dynamics.MVAR_single)(i,'OLS',25, 'notch', join(root_dir,'resting', 'MVAR'),
+                                parcel_dir, parcel_files, 150) for i in range(len(parcel_files)))
 
 #%% now we are going to run a GLM to see how consistent connectivity is accross participants
 # The data will be in the form 136x12x12x36 (participant by parcels sender by parcel reciever by frequency power)
@@ -277,7 +235,7 @@ contrasts.append(glmtools.design.Contrast(name='Age',values=[0,1,0]))
 
 
 # add regressor for IQ
-regs.append(glmtools.regressors.ParametricRegressor(values=age,
+regs.append(glmtools.regressors.ParametricRegressor(values=IQ,
                                                     name='IQ',
                                                     preproc='z',
                                                     num_observations=dat.info['num_observations']))
@@ -290,6 +248,10 @@ model = glmtools.fit.OLSModel( des, dat )
 
 
 
+#%% use dynamics module to create surrogate permutations
+
+null = dynamics.single_perm(type='OLS', modes=25, filter='notch', outdir=join(root_dir,'resting', 'MVAR'),
+                            parcel_dir=parcel_dir, parcel_files= parcel_files, sample_rate=150, glm_regs=[age,IQ])
 
 
 #%% permute Intercept

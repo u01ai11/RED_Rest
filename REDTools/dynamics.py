@@ -195,7 +195,7 @@ def single_perm(type, modes, filter, outdir, parcel_dir,
     # append each of the regressors passed in
     for i in range(len(glm_regs)):
         # add regressor for Age
-        regs.append(glmtools.regressors.ParametricRegressor(values=age,
+        regs.append(glmtools.regressors.ParametricRegressor(values=glm_regs[i],
                                                             name=f'reg_{i}',
                                                             preproc='z',
                                                             num_observations=dat.info['num_observations']))
