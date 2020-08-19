@@ -14,6 +14,7 @@ import scipy
 import random
 import copy
 import pandas as pd
+import os
 #%%
 root_dir = '/imaging/ai05/RED/RED_MEG' # the root directory for the project
 figdir = '/imaging/ai05/images'
@@ -253,6 +254,69 @@ model = glmtools.fit.OLSModel( des, dat )
 null = dynamics.single_perm(type='OLS', modes=25, filter='notch', outdir=join(root_dir,'resting', 'MVAR'),
                             parcel_dir=parcel_dir, parcel_files= parcel_files, sample_rate=150, glm_regs=[age,IQ])
 
+#%% send to cluster for multiple permutations
+perms = 200
+outdir = join(root_dir,'resting', 'MVAR')
+pythonpath = '/home/ai05/.conda/envs/mne_2/bin/python'
+for i in range(perms):
+    pycom = f"""
+sys.path.insert(0, '/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest')
+from REDTools import dynamics
+import numpy as np
+
+import sys
+from os import listdir as listdir
+from os.path import join
+import pandas as pd 
+
+outdir = {outdir}
+parcel_dir = {parcel_dir}
+root_dir = {root_dir}
+parcel_files = listdir(parcel_dir) # list them
+
+meta_dat_path = join(root_dir, 'Combined2.csv')
+meta = pd.read_csv(meta_dat_path)
+tmp_id = meta.Alex_ID.to_list()# get IDS
+tmp_id = [str(f).replace('_','-') for f in tmp_id] # replace to match filenames
+meta.Alex_ID = tmp_id
+
+age = []
+IQ = []
+ids = [i.split('_')[0] for i in parcel_files]
+
+for id_ in ids:
+    #if id is not in meta, nan it
+    if id_ not in meta.Alex_ID.to_list():
+        age.append(np.nan)
+        IQ.append(np.nan)
+    else:
+        age.append(float(meta[meta.Alex_ID == id_].Age))
+        IQ.append(float(meta[meta.Alex_ID == id_].WASI_Mat))
+
+age = np.array(age)
+IQ = np.array(IQ)
+
+age[np.isnan(age)] = np.nanmean(age)
+IQ[np.isnan(IQ)] = np.nanmean(IQ)
+
+null = dynamics.single_perm(type='OLS', modes=25, filter='notch', outdir=outdir,
+                            parcel_dir=parcel_dir, parcel_files= parcel_files, sample_rate=150, glm_regs=[age,IQ])
+                            
+np.save(join(outdir, 'perm_{i}.npy'), null)
+
+    """
+    # save to file
+    print(pycom, file=open(join(outdir, 'cluster_scripts', f'{i}_permscript.py'), 'w'))
+
+    # construct csh file
+    tcshf = f"""#!/bin/tcsh
+            {pythonpath} {join(outdir, 'cluster_scripts', f'{i}_permscript.py')}
+                    """
+    # save to directory
+    print(tcshf, file=open(join(outdir, 'cluster_scripts', f'{i}_permscript.csh'), 'w'))
+
+    # execute this on the cluster
+    os.system(f"sbatch --job-name=AmpEnvConnect_{i} --mincpus=4 -t 0-3:00 {join(outdir, 'cluster_scripts', f'{i}_permscript.csh')}")
 
 #%% permute Intercept
 
@@ -298,12 +362,21 @@ plt.savefig(join(figdir, f'glm_tstats_IQ.png'), bbox_inches='tight')
 plt.close(fig)
 
 
-#%% plot the t stats
+#%% plot the t stats null
 
-fig = sails.plotting.plot_vector(model.tstats.transpose([1,2,3,0]), freq_vect, diag=False)
+fig = sails.plotting.plot_vector(null.transpose([1,2,3,0]), freq_vect, diag=False)
 
 ax = plt.gca()
-#ax.set_ylim((0,20))
+ax.set_ylim((0,30))
+plt.savefig(join(figdir, f'glm_null_tstats_group.png'), bbox_inches='tight')
+plt.close(fig)
+
+#%% plot the t stats
+
+fig = sails.plotting.plot_vector(model.get_tstats().transpose([1,2,3,0]), freq_vect, diag=False)
+
+ax = plt.gca()
+ax.set_ylim((0,30))
 plt.savefig(join(figdir, f'glm_tstats_group.png'), bbox_inches='tight')
 plt.close(fig)
 #%%

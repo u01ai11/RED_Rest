@@ -171,7 +171,7 @@ def single_perm(type, modes, filter, outdir, parcel_dir,
     """
 
     #loop through all participants and create surrogate data
-    joblib.Parallel(n_jobs =20)(
+    joblib.Parallel(n_jobs =30)(
     joblib.delayed(surrogate_MVAR)(0, i, type, modes, filter, outdir,
                                    parcel_dir, parcel_files, sample_rate) for i in range(len(parcel_files)))
 
@@ -181,7 +181,7 @@ def single_perm(type, modes, filter, outdir, parcel_dir,
     glm_data = np.empty((len(parcel_files), X.shape[1],X.shape[1],36))
     for i in range(len(parcel_files)):
         id_ = parcel_files[i].split('_')[0]
-        glm_data[i,:,:,:] = np.load(join(outdir, f'mvar_surr_{type}_{id_}_{1}.npy'))[:,:,:,0]
+        glm_data[i,:,:,:] = np.load(join(outdir, f'mvar_surr_{type}_{id_}_{0}.npy'))[:,:,:,0]
 
     # Now we need to design the GLM
     dat = glmtools.data.TrialGLMData(data=glm_data, dim_labels=['participants', 'parcel_drivers', 'parcel_recievers', 'frequency'])
