@@ -3,7 +3,8 @@ import os
 import numpy as np
 import joblib
 import matplotlib.pyplot as plt
-import re
+from time import sleep
+import sys
 def preprocess_multiple(flist, indir, outdir, overwrite, njobs):
     """ Takes a list of raw files and preprocesses them
     Parameters

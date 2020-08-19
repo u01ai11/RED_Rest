@@ -31,6 +31,7 @@ from scipy.io import loadmat
 from numpy.linalg import svd
 from scipy.spatial.distance import euclidean
 from scipy.optimize import linear_sum_assignment
+import sklearn
 #%% Paths and meta-deta
 root_dir = '/imaging/ai05/RED/RED_MEG'
 envcor_path = join(root_dir, 'aec_combined')
@@ -117,106 +118,36 @@ for i, megid in enumerate([f.replace('-', '_') for f in nMEG_id]):
 #%% Use inexact graph matching algorithms to calculate node-to-node similarity (Osmanlioglu et al 2019)
 
 #first only use participants with both full connectomes
-
-# get inputs
-in_struct = struct_main[is_data_nan, 0, :,:]
+in_struct = struct_main[is_data_nan, 4, :,:]
 in_func = mat_3d[is_data_nan,:,:]
-#in_func = struct_main[is_data_nan, 4, :,:]
-# functional MEG connectomes are pretty dense, so do some thresholding
-# let's take the top X percentage of connections
-percentile = 90
-
-# or we can use density base thresholding
-# i.e. number of nonzero connections divided by all possible connections
-# first choose a threshold for removal and remove
-
-
-def calc_density(matrix):
-    rem_self =  matrix- np.diag(np.diag(matrix))
-    return np.count_nonzero(rem_self)/np.prod(rem_self.shape)
-
-def permute_connections(m):
-
-    """Permutes the connection weights in a sparse 2D matrix. Keeps the
-    location of connections in place, but permutes their strengths.
-
-    Arguments
-
-    m       -   numpy.ndarray with a numerical dtype and shape (N,N) where N
-                is the number of nodes. Lack of connection should be denoted
-                by 0, and connections should be positive or negative values.
-
-    Returns
-
-    perm_m  -   numpy.ndarray of shape (N,N) with permuted connection weights.
-    """
-
-    # Verify the input.
-    if len(m.shape) != 2:
-        raise Exception("Connection matrix `m` should be 2D")
-    if m.shape[0] != m.shape[1]:
-        raise Exception("Connection matrix `m` should be symmetric")
-
-    # Copy the original matrix to prevent modifying it in-place.
-    perm_m = np.copy(m)
-
-    # Get the indices to the lower triangle.
-    i_low = np.tril_indices(perm_m.shape[0], -1)
-
-    # Create a flattened copy of the connections.
-    flat_m = perm_m[i_low]
-
-    # Shuffle all non-zero connections.
-    nonzero = flat_m[flat_m != 0]
-    np.random.shuffle(nonzero)
-    flat_m[flat_m != 0] = nonzero
-
-    # Place the shuffled connections over the original connections in the
-    # copied matrix.
-    perm_m[i_low] = flat_m
-
-    # Copy lower triangle to upper triangle to make the matrix symmertical.
-    perm_m.T[i_low] = perm_m[i_low]
-
-    return perm_m
-
-density_S = [calc_density(f) for f in in_struct]
-
-# get copy
-in_c = in_func.copy()
-
-
-start_t = 0.07 # start threshold
-step = 0.0001 # start step
-
-# target density to match input
-target_density = np.mean(density_S)
-
-for i in range(1000): # iterations
-    tmp_c = in_c.copy() # make copy
-    for ii in range(in_c.shape[0]): # participants
-        tmp_c[ii][tmp_c[ii,:,:] < start_t] = 0
-    # calc density
-    mean_density = np.mean([calc_density(f) for f in tmp_c])
-
-    if mean_density > target_density:
-        start_t += step
-    else:
-        start_t -= step
-
-    print(mean_density)
-
-#use tmp_c as the real
-in_func = tmp_c
 #%%
+from REDTools.graph_matching import match_density, match_graphs, generate_null_dist
 
-
+# assign graphs
 graph_1 = in_struct
-graph_2 = match_density(in_func, graph_1, 0.7, 0.0001,1000)
+graph_2 = match_density(in_func, graph_1, 0.07, 0.001,100) # match densities between graphs
 
-matching = match_graphs(graph_1, graph_2, 20)
+np.count_nonzero(graph_1)
 
-null = generate_null_dist(graph_1, graph_2, 10, 10)
+#Normalise (per participant). axis=1 treats each sample indepdently for normalisation (rather than doing it by row)
+graph_1 = np.array([sklearn.preprocessing.normalize(x, axis=1) for x in graph_1])
+graph_2 = np.array([sklearn.preprocessing.normalize(x, axis=1) for x in graph_2])
+
+#Or Z-score?
+graph_1 = np.array([ss.zscore(x) for x in graph_1])
+graph_2 = np.array([ss.zscore(x) for x in graph_2])
+
+matching = match_graphs(graph_1, graph_2, 20, log=True) # perform initial matching
+
+null = generate_null_dist(graph_1, graph_2, 10, 100) # permute to get null distribution
+
+#%%
+# for each pair get .05 monte carlo thresholds
+monte_thresh = np.percentile(null, 0.95, axis=2)
+
+# get significance mask by applying to match
+pairwise_perc = matching[1].mean(axis=0)# calculate percentage match across group
+significance_mask = pairwise_perc > monte_thresh #
 
 #%%
 #initialise empty arrays

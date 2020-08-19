@@ -18,7 +18,8 @@ import scipy.stats as ss
 from scipy.spatial.distance import euclidean
 from scipy.optimize import linear_sum_assignment
 import joblib
-
+from time import sleep
+import sys
 
 def calc_density(matrix):
     """returns the density of a given matrix
@@ -31,16 +32,26 @@ def calc_density(matrix):
     rem_self =  matrix- np.diag(np.diag(matrix))
     return np.count_nonzero(rem_self)/np.prod(rem_self.shape)
 
-def permute_connections(m):
+def permute_connections(m, randomise_nodes=False):
 
     """Permutes the connection weights in a sparse 2D matrix. Keeps the
-    location of connections in place, but permutes their strengths.
+    location of connections in place, but permutes their strengths. In
+    addition, this function can randomise node order, meaning the connections
+    will be shuffled after node order is shuffled. This retains node degree
+    distribution while changing the network.
 
     Arguments
 
-    m       -   numpy.ndarray with a numerical dtype and shape (N,N) where N
-                is the number of nodes. Lack of connection should be denoted
-                by 0, and connections should be positive or negative values.
+    m                   -   numpy.ndarray with a numerical dtype and shape
+                            (N,N) where N is the number of nodes. Lack of
+                            connection should be denoted by 0, and connections
+                            should be positive or negative values.
+
+    Keyword Arguments
+
+    randomise_nodes     -   bool to indicate whether the node order should be
+                            shuffled before shuffling the connections.
+                            Default = False
 
     Returns
 
@@ -55,6 +66,12 @@ def permute_connections(m):
 
     # Copy the original matrix to prevent modifying it in-place.
     perm_m = np.copy(m)
+
+    # Randomise the node order.
+    if randomise_nodes:
+        shuffled_i = np.arange(perm_m.shape[0], dtype=int)
+        np.random.shuffle(shuffled_i)
+        perm_m = perm_m[shuffled_i,:][:,shuffled_i]
 
     # Get the indices to the lower triangle.
     i_low = np.tril_indices(perm_m.shape[0], -1)
@@ -76,6 +93,78 @@ def permute_connections(m):
 
     return perm_m
 
+def randomise_connections(m, randomise_rows=True):
+
+    """Completely randomises graph connections represented in a 2D matrix,
+    with an option to retain the node degree distribution.
+
+    Arguments
+
+    m                   -   numpy.ndarray with a numerical dtype and shape
+                            (N,N) where N is the number of nodes. Lack of
+                            connection should be denoted by 0, and connections
+                            should be positive or negative values.
+
+    Keyword Arguments
+
+    randomise_rows      -   bool to indicate whether the weights should only
+                            be shuffled within each row (note: each row insofar
+                            it is within the lower triangle). Default = True
+
+    Returns
+
+    rand_m  -   numpy.ndarray of shape (N,N) with randomised connection
+                weights.
+    """
+
+    # Verify the input.
+    if len(m.shape) != 2:
+        raise Exception("Connection matrix `m` should be 2D")
+    if m.shape[0] != m.shape[1]:
+        raise Exception("Connection matrix `m` should be symmetric")
+
+    # Copy the original matrix to prevent modifying it in-place.
+    rand_m = np.copy(m)
+
+    # If the node degree distribution needs to be retained, nodes need to have
+    # their connections shuffled. Here, the nodes are first shuffled to
+    # randomise their order, and their connections are subsequently shuffled
+    # one by one. If their order was not shuffled,
+    if randomise_rows:
+        #        # Randomise the node order.
+        #        if randomise_nodes:
+        #            shuffled_i = numpy.arange(rand_m.shape[0], dtype=int)
+        #            numpy.random.shuffle(shuffled_i)
+        #            rand_m = rand_m[shuffled_i,:][:,shuffled_i]
+        # Randomise each row in the lower triangle.
+        for row in range(2, rand_m.shape[0]):
+            i = np.arange(row, dtype=int)
+            np.random.shuffle(i)
+            rand_m[row,:row] = rand_m[row,:row][i]
+    #        # Return to the original node order.
+    #        if randomise_nodes:
+    #            undo_shuffle_i = numpy.argsort(shuffled_i)
+    #            rand_m = rand_m[undo_shuffle_i,:][:,undo_shuffle_i]
+
+    # Simply shuffle all values if the node degree distribution can be altered.
+    else:
+        # Get the indices to the lower triangle.
+        i_low = np.tril_indices(rand_m.shape[0], -1)
+        # Create a flattened copy of the connections.
+        flat_m = rand_m[i_low]
+        # Shuffle all non-zero connections.
+        np.random.shuffle(flat_m)
+        # Place the shuffled connections over the original connections in the
+        # copied matrix.
+        rand_m[i_low] = flat_m
+
+    # Get the indices to the lower triangle.
+    i_low = np.tril_indices(rand_m.shape[0], -1)
+    # Copy lower triangle to upper triangle to make the matrix symmertical.
+    rand_m.T[i_low] = rand_m[i_low]
+
+    return rand_m
+
 def match_density(sample_matrix, target_matrix, start_t, step, iterations):
     """ Iteratively removes connections of matrix to match density
 
@@ -88,13 +177,24 @@ def match_density(sample_matrix, target_matrix, start_t, step, iterations):
     """
     target_densities = [calc_density(f) for f in target_matrix]
 
+    in_c = sample_matrix.copy()
 
     # target density to match input
     target_density = np.mean(target_densities)
     print(f'target density of: {target_density}')
     print(f'now iterating {iterations} times')
     for i in range(iterations): # iterations
-        tmp_c = sample_matrix.copy() # make copy
+
+        # log out progress
+        sys.stdout.write('\r')
+        # the exact output you're looking for:
+        j = (i+1)/iterations
+        sys.stdout.write("Match density: [%-20s] %d%%" % ('='*int(20*j), 100*j))
+        sys.stdout.flush()
+        sleep(0.0001)
+
+        #tmp_c = np.copy(sample_matrix) # make copy
+        tmp_c = in_c.copy()
         for ii in range(sample_matrix.shape[0]): # participants
             tmp_c[ii][tmp_c[ii,:,:] < start_t] = 0
         # calc density
@@ -104,12 +204,12 @@ def match_density(sample_matrix, target_matrix, start_t, step, iterations):
             start_t += step
         else:
             start_t -= step
-
+    sys.stdout.write('\n')
     print(f'reached density of: {mean_density}')
     print(f'this is {target_density - mean_density} away from target')
     return tmp_c
 
-def match_graphs_participant(graph_1, graph_2, p):
+def match_graphs_participant(graph_1, graph_2, p, log):
     """ Matches graphs for one participant only
 
     The process is as follows:
@@ -128,9 +228,14 @@ def match_graphs_participant(graph_1, graph_2, p):
     binary_match_mat: binary matching matrix showing which node each node matched to
 
     """
-
-
-    print(p)
+    if log:
+        # log out progress
+        sys.stdout.write('\r')
+        # the exact output you're looking for:
+        j = (p+1)/len(graph_1)
+        sys.stdout.write("Matching: [%-20s] %d%%" % ('='*int(20*j), 100*j))
+        sys.stdout.flush()
+        sleep(0.0001)
 
     # Here we just use one participant
     this_structural = graph_1[p, :,:]
@@ -140,6 +245,8 @@ def match_graphs_participant(graph_1, graph_2, p):
     # z score both
     this_structural = ss.zscore(this_structural)
     this_functional = ss.zscore(this_functional)
+
+
 
     # deal with NaN and infinte values
     this_structural = np.nan_to_num(this_structural)
@@ -170,7 +277,7 @@ def match_graphs_participant(graph_1, graph_2, p):
 
     return binary_nodes, binary_match_mat, cost_euc
 
-def match_graphs(graph_1, graph_2, njobs):
+def match_graphs(graph_1, graph_2, njobs, log):
     """ Takes two graphs and performs inexact graph matching
 
 
@@ -181,7 +288,7 @@ def match_graphs(graph_1, graph_2, njobs):
     """
 
     output = \
-        joblib.Parallel(n_jobs=njobs)(joblib.delayed(match_graphs_participant)(graph_1, graph_2, p) for p in range(graph_1.shape[0]))
+        joblib.Parallel(n_jobs=njobs)(joblib.delayed(match_graphs_participant)(graph_1, graph_2, p, log) for p in range(graph_1.shape[0]))
 
     binary_matched = np.array([f[0] for f in output])
     binary_matched_matrix = np.array([f[1] for f in output])
@@ -197,8 +304,8 @@ def permute_and_match(graph_1, graph_2, njobs):
     :return:
     """
     # permute one graph
-    graph_1_p = np.array([permute_connections(g) for g in graph_1])
-    return match_graphs(graph_1_p, graph_2, njobs)[1]
+    graph_1_p = np.array([randomise_connections(g) for g in graph_1])
+    return match_graphs(graph_1_p, graph_2, njobs, log=False)[1]
 
 def generate_null_dist(graph_1, graph_2, perms, njobs):
     """ Generates a matrix of results from permuted matrix comparisons
@@ -208,9 +315,15 @@ def generate_null_dist(graph_1, graph_2, perms, njobs):
     :param njobs: how many parallel jobs to use
     :return: matrix of permuted results per participant and per connection
     """
-
     bin_matrix = np.zeros([graph_1.shape[1], graph_1.shape[2], perms]) # for the nulls
     for p in range(perms): # each permutation
+        # log out progress
+        sys.stdout.write('\r')
+        # the exact output you're looking for:
+        j = (p+1)/perms
+        sys.stdout.write("Generating null: [%-20s] %d%%" % ('='*int(20*j), 100*j))
+        sys.stdout.flush()
+        sleep(0.0001)
         perm_matrix = permute_and_match(graph_1,graph_2, njobs) # get permuted matches
         bin_matrix[:,:,p] = perm_matrix.mean(axis=0) # calculate the distribution metric
 

@@ -101,4 +101,4 @@ ica.apply(raw)
 raw.plot(start=120).savefig('/home/ai05/raw2.png')
 #%%
 
-#%%
+#%% preprocess to remove the 50hz line noise that is still present
