@@ -88,8 +88,9 @@ def surrogate_MVAR(perm, ind, type, modes, filter, outdir, parcel_dir, parcel_fi
 
 
     # we only need to fourier transform once, if not first permutation read from cache file
+    X = np.load(join(parcel_dir, parcel_files[ind]))
     if perm == 0:
-        X = np.load(join(parcel_dir, parcel_files[ind]))
+
         if filter == 'notch':
             X = mne.filter.notch_filter(X, Fs=sample_rate, freqs=np.arange(50, 75, 50))
         elif type(filter) == tuple:

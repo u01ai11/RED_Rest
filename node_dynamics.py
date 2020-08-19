@@ -319,6 +319,14 @@ np.save(join(outdir, 'perm_{i}.npy'), null)
     # execute this on the cluster
     os.system(f"sbatch --job-name=SURR_MVAR_{i} --mincpus=4 -t 0-3:00 {join(outdir, 'cluster_scripts', f'{i}_permscript.csh')}")
 
+#%% after this has completed, read the permutation data
+nshape = list(model.get_tstats().shape)
+nshape.append(perms)
+nulls = np.zeros(nshape)
+for i in range(perms):
+    nulls[:,:,:,:,i] = np.load(join(outdir, f'perms_{i}.npy'))
+
+
 #%% permute Intercept
 
 P_i = glmtools.permutations.Permutation(des, dat, 1, 1000, metric='tstats' )
