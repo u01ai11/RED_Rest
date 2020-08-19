@@ -172,7 +172,7 @@ def single_perm(type, modes, filter, outdir, parcel_dir,
 
     #loop through all participants and create surrogate data
     joblib.Parallel(n_jobs =20)(
-    joblib.delayed(surrogate_MVAR)(1, i, type, modes, filter, outdir,
+    joblib.delayed(surrogate_MVAR)(0, i, type, modes, filter, outdir,
                                    parcel_dir, parcel_files, sample_rate) for i in range(len(parcel_files)))
 
     # get all that surrogate data into format for GLM
