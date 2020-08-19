@@ -260,18 +260,19 @@ outdir = join(root_dir,'resting', 'MVAR')
 pythonpath = '/home/ai05/.conda/envs/mne_2/bin/python'
 for i in range(perms):
     pycom = f"""
+import sys
 sys.path.insert(0, '/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest')
 from REDTools import dynamics
 import numpy as np
 
-import sys
+
 from os import listdir as listdir
 from os.path import join
 import pandas as pd 
 
-outdir = {outdir}
-parcel_dir = {parcel_dir}
-root_dir = {root_dir}
+outdir = '{outdir}'
+parcel_dir = '{parcel_dir}'
+root_dir = '{root_dir}'
 parcel_files = listdir(parcel_dir) # list them
 
 meta_dat_path = join(root_dir, 'Combined2.csv')
@@ -300,7 +301,7 @@ age[np.isnan(age)] = np.nanmean(age)
 IQ[np.isnan(IQ)] = np.nanmean(IQ)
 
 null = dynamics.single_perm(type='OLS', modes=25, filter='notch', outdir=outdir,
-                            parcel_dir=parcel_dir, parcel_files= parcel_files, sample_rate=150, glm_regs=[age,IQ])
+                            parcel_dir=parcel_dir, parcel_files= parcel_files, sample_rate=150, glm_regs=[age,IQ], perm={i})
                             
 np.save(join(outdir, 'perm_{i}.npy'), null)
 
@@ -316,7 +317,7 @@ np.save(join(outdir, 'perm_{i}.npy'), null)
     print(tcshf, file=open(join(outdir, 'cluster_scripts', f'{i}_permscript.csh'), 'w'))
 
     # execute this on the cluster
-    os.system(f"sbatch --job-name=AmpEnvConnect_{i} --mincpus=4 -t 0-3:00 {join(outdir, 'cluster_scripts', f'{i}_permscript.csh')}")
+    os.system(f"sbatch --job-name=SURR_MVAR_{i} --mincpus=4 -t 0-3:00 {join(outdir, 'cluster_scripts', f'{i}_permscript.csh')}")
 
 #%% permute Intercept
 
