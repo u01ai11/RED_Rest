@@ -118,15 +118,15 @@ def __preprocess_individual(file, outdir, overwrite):
         print('could not read ' + file)
         return ''
 
-    raw.filter(1, 50., fir_design='firwin')
-
+    raw.filter(0.1, None)
+    raw.notch_filter(freqs=np.arange(50, 75, 50))
     # Run ICA on raw data to find blinks and eog
     ica = mne.preprocessing.ICA(n_components=25, method='fastica').fit(raw)
 
     try:
         # look for and remove EOG
         eog_epochs = mne.preprocessing.create_eog_epochs(raw)  # get epochs of eog (if this exists)
-        eog_inds, eog_scores = ica.find_bads_eog(eog_epochs, threshold=1)  # try and find correlated components
+        eog_inds, eog_scores = ica.find_bads_eog(eog_epochs)  # try and find correlated components
 
         # define flags for tracking if we found components matching or not
         no_ecg_removed = False
@@ -147,7 +147,7 @@ def __preprocess_individual(file, outdir, overwrite):
     # now we do this with hearbeat
     try:
         ecg_epochs = mne.preprocessing.create_ecg_epochs(raw)  # get epochs of eog (if this exists)
-        ecg_inds, ecg_scores = ica.find_bads_ecg(ecg_epochs, threshold=0.5)  # try and find correlated components
+        ecg_inds, ecg_scores = ica.find_bads_ecg(ecg_epochs)  # try and find correlated components
 
         # if one component reaches above threshold then remove components automagically
         if len(ecg_inds) > 0:

@@ -9,7 +9,7 @@ import joblib
 from numpy import random
 
 
-def MVAR_single(ind, type, modes, filter, outdir, parcel_dir, parcel_files, sample_rate):
+def MVAR_single(ind, type, modes, filter, outdir, parcel_dir, parcel_files, sample_rate, metric):
 
     """
     Runs a multivariate auto-regression on timefrequency data, and saves the output
@@ -57,12 +57,20 @@ def MVAR_single(ind, type, modes, filter, outdir, parcel_dir, parcel_files, samp
         m = sails.VieiraMorfLinearModel.fit_model(X, delay_vect)
     # get fourier decomp of model coefficients
     Fo = sails.mvar_metrics.FourierMvarMetrics.initialise(m, sample_rate, freq_vect)
+
+
+    # choose metric
+    if metric == 'direct_transfer_function':
+        out = Fo.directed_transfer_function
+    elif metric == 'partial_directed_coherence':
+        out = Fo.partial_directed_coherence
+
     # save to file
     # get name
-    np.save(join(outdir, f'mvar_{type}_{id_}.npy'),Fo.directed_transfer_function)
+    np.save(join(outdir, f'mvar_{type}_{id_}.npy'),out)
     return Fo, m
 
-def surrogate_MVAR(perm, ind, type, modes, filter, outdir, parcel_dir, parcel_files, sample_rate):
+def surrogate_MVAR(perm, ind, type, modes, filter, outdir, parcel_dir, parcel_files, sample_rate, metric):
 
     """
     Creates a surrogate timeseries, with phase shuffled but amplitude and frequency spectra maintained
@@ -145,12 +153,19 @@ def surrogate_MVAR(perm, ind, type, modes, filter, outdir, parcel_dir, parcel_fi
     Fo = sails.mvar_metrics.FourierMvarMetrics.initialise(m, sample_rate, freq_vect)
     # save to file
     # get name
-    np.save(join(outdir, f'mvar_surr_{type}_{id_}_{perm}.npy'),Fo.directed_transfer_function)
+
+    # choose metric
+    if metric == 'direct_transfer_function':
+        out = Fo.directed_transfer_function
+    elif metric == 'partial_directed_coherence':
+        out = Fo.partial_directed_coherence
+
+    np.save(join(outdir, f'mvar_surr_{type}_{id_}_{perm}.npy'),out)
     return Fo, m
 
 
 def single_perm(type, modes, filter, outdir, parcel_dir,
-                parcel_files, sample_rate, glm_regs, perm):
+                parcel_files, sample_rate, glm_regs, perm, metric):
 
     """
     Performs a single permutation on a group level GLM on the Direct Transfer Function metric of a
@@ -172,7 +187,7 @@ def single_perm(type, modes, filter, outdir, parcel_dir,
     #loop through all participants and create surrogate data
     joblib.Parallel(n_jobs =30)(
     joblib.delayed(surrogate_MVAR)(perm, i, type, modes, filter, outdir,
-                                   parcel_dir, parcel_files, sample_rate) for i in range(len(parcel_files)))
+                                   parcel_dir, parcel_files, sample_rate, metric) for i in range(len(parcel_files)))
 
     # get all that surrogate data into format for GLM
     #load one file to get shape info
