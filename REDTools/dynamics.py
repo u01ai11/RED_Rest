@@ -184,7 +184,7 @@ def single_perm(type, modes, filter, outdir, parcel_dir,
     """
 
     #loop through all participants and create surrogate data
-    joblib.Parallel(n_jobs =30)(
+    joblib.Parallel(n_jobs =10)(
     joblib.delayed(surrogate_MVAR)(perm, i, type, modes, filter, outdir,
                                    parcel_dir, parcel_files, sample_rate, metric) for i in range(len(parcel_files)))
 

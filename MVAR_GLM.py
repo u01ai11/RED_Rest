@@ -64,7 +64,7 @@ IQ[np.isnan(IQ)] = np.nanmean(IQ)
 #%%
 
 # then we need to load all of the participants modelled data
-glm_data = np.empty((len(parcel_files), 12,12,36))
+glm_data = np.empty((len(parcel_files), 68,68,36))
 for i in range(len(parcel_files)):
     id_ = parcel_files[i].split('_')[0]
     glm_data[i,:,:,:] = np.load(join(root_dir,'resting', 'MVAR', f'mvar_OLS_{id_}.npy'))[:,:,:,0]
@@ -105,7 +105,8 @@ model = glmtools.fit.OLSModel( des, dat )
 #%% use dynamics module to create surrogate permutations
 
 null = dynamics.single_perm(type='OLS', modes=25, filter='notch', outdir=join(root_dir,'resting', 'MVAR'),
-                            parcel_dir=parcel_dir, parcel_files= parcel_files, sample_rate=150, glm_regs=[age,IQ],perm=27)
+                            parcel_dir=parcel_dir, parcel_files= parcel_files, sample_rate=150,
+                            glm_regs=[], perm=27, metric='partial_directed_coherence')
 
 #%% send to cluster for multiple permutations
 perms = 1000
@@ -155,7 +156,8 @@ age[np.isnan(age)] = np.nanmean(age)
 IQ[np.isnan(IQ)] = np.nanmean(IQ)
 
 null = dynamics.single_perm(type='OLS', modes=25, filter='notch', outdir=outdir,
-                            parcel_dir=parcel_dir, parcel_files= parcel_files, sample_rate=150, glm_regs=[age,IQ], perm={i})
+                            parcel_dir=parcel_dir, parcel_files= parcel_files, 
+                            sample_rate=150, glm_regs=[age,IQ], perm={i}, metric='partial_directed_coherence')
                             
 np.save(join(outdir, 'perm_{i}.npy'), null)
 
@@ -171,7 +173,9 @@ np.save(join(outdir, 'perm_{i}.npy'), null)
     print(tcshf, file=open(join(outdir, 'cluster_scripts', f'{i}_permscript.csh'), 'w'))
 
     # execute this on the cluster
-    os.system(f"sbatch --job-name=SURR_MVAR_{i} --mincpus=4 -t 0-3:00 {join(outdir, 'cluster_scripts', f'{i}_permscript.csh')}")
+    os.system(f"sbatch --job-name=SURR_MVAR_{i} --mincpus=10 -t 0-3:00 {join(outdir, 'cluster_scripts', f'{i}_permscript.csh')}")
+
+#%% We need to do the permutations for the design matrix seperately to the surrogate data
 
 #%% after this has completed, read the permutation data
 perms =1000

@@ -47,7 +47,7 @@ X = X.transpose([1,2,0])
 X[:,:,0] = sails.orthogonalise.symmetric_orthonormal(X[:,:,0], maintain_mag=False)[0]
 
 #reshape as sails expects (nsignals, nsamples, ntrials)
-X = X.transpose([1,2,0])
+#X = X.transpose([1,2,0])
 
 
 #%%
@@ -57,7 +57,7 @@ AICs = []
 RSQs = []
 orders = []
 
-data = X
+data = X[0:10,:,:]
 for delays in range(2, 35):
     print(delays)
     delay_vect = np.arange(delays)
@@ -66,7 +66,7 @@ for delays in range(2, 35):
     orders.append(m.order)
     AICs.append(diag.AIC)
     RSQs.append(diag.R_square)
-
+#%%
 f = plt.figure()
 plt.plot(orders, AICs, 'o');
 plt.xlabel('Model Order')
@@ -89,7 +89,7 @@ sample_rate = 150 # sample rate
 freq_vect = np.linspace(0, sample_rate/2, 36) #frequency vector representing the model metrics
 
 parcel_ind = 3
-delays = 20
+delays = 31
 
 
 #%% just do the welch's to find good number for nperseg
@@ -125,29 +125,31 @@ plt.savefig(join(figdir, f'welch_PSD_{parcel_ind}'))
 plt.close('all')
 #%%
 
-no_parts = 5
+no_parts = len(parcel_files)
 sample_rate = 150 # sample rate
 freq_vect = np.linspace(0, sample_rate/2, 36) #frequency vector representing the model metrics
 
-parcel_ind = 1
+parcels = list(range(0,10))
+parcel_ind = 5
 delays = 25
 
 
 nperseg = 70
 
-mod = 'vm'
-#mod = 'ols'
+#mod = 'vm'
+mod = 'ols'
 
 compare_spectrum = np.zeros([2,36, no_parts])
 for i in range(no_parts):
+    print(i)
     # load data
     X = np.load(join(parcel_dir, parcel_files[i]))
     # filter
-    #X = mne.filter.filter_data(X, sfreq=150, l_freq=0, h_freq=50)
-    X = mne.filter.notch_filter(X, Fs=150, freqs=np.arange(50, 75, 50))
+
 
     # transpose
     X = X.transpose([1,2,0])
+    X = X[parcels,:,:]
     X[:,:,0] = sails.orthogonalise.symmetric_orthonormal(X[:,:,0], maintain_mag=False)[0]
     # model
     delay_vect = np.arange(delays)
