@@ -8,6 +8,7 @@ from REDTools import study_info
 from REDTools import connectivity
 import joblib
 import pandas as pd
+import mne
 #%%
 root_dir = '/imaging/ai05/RED/RED_MEG'
 MP_name = 'Series005_CBU_MPRAGE_32chn'
@@ -51,7 +52,13 @@ lambda2 = 1. / 9.
 pick_ori = 'normal'
 parc = 'aparc'
 time_course_mode = 'mean'
-age_node_names = np.load('/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest/age_node_names.npy')
+#age_node_names = np.load('/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest/age_node_names.npy')
+
+labels = mne.read_labels_from_annot('fsaverage_1', parc='aparc',
+                                    subjects_dir=join(STRUCTDIR,'FS_SUBDIR'))
+labels = labels[0:-1]
+label_names = [label.name for label in labels]
+
 
 kw = {
     'invdir': invdir,
@@ -67,7 +74,7 @@ kw = {
     'pick_ori': pick_ori,
     'parc': parc,
     'time_course_mode': time_course_mode,
-    'parcel_names': age_node_names
+    'parcel_names': label_names
 }
 
 # connectivity.cluster_parcel_timecourses('/home/ai05/.conda/envs/mne_2/bin/python',
@@ -127,11 +134,11 @@ kw = {
     'pick_ori': pick_ori,
     'parc': parc,
     'time_course_mode': time_course_mode,
-    'parcel_names': age_node_names
+    'parcel_names': label_names
 }
 
 joblib.Parallel(n_jobs =10)(
-    joblib.delayed(connectivity.get_parcel_timecourses)(i, kw) for i in range(len(RED_id)))
+    joblib.delayed(connectivity.get_parcel_timecourses)(i, kw) for i in range(len(in_id)))
 
 
 

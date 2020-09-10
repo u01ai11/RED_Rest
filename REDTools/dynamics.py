@@ -39,8 +39,7 @@ def MVAR_single(ind, type, modes, filter, outdir, parcel_dir, parcel_files, samp
         # we also probably want to filter our data slightly (use FIR)
         X = mne.filter.filter_data(X, sfreq=sample_rate, l_freq=filter[0], h_freq=filter[1])
     else:
-        print(f'{filter} is an unrecognised filter')
-        return
+        print(f'{filter} is an unrecognised filter, not filtering')
 
     if len(X.shape) == 1:
         print('not correct data input, skipping')

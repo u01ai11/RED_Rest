@@ -172,7 +172,7 @@ mne_src_files = sourcespace_setup.setup_src_multiple(sublist=fs_sub,
                                                      surface='white',
                                                      src_mode='cortical',
                                                      n_jobs1=15,
-                                                     n_jobs2=1)
+                                                     n_jobs2=2)
 #%% rad in bem models
 mne_bem_files = sourcespace_setup.make_bem_multiple(sublist=fs_sub,
                                                     fs_sub_dir=join(resting_path, 'FS_SUBDIR'),

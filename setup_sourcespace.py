@@ -120,9 +120,9 @@ mne_src_files = sourcespace_setup.setup_src_multiple(sublist=MR_id,
                                                          outdir=join(MAINDIR, 'src_space'),
                                                          spacing='oct6',
                                                          surface='white',
-                                                         src_mode='volume',
-                                                         n_jobs1=14,
-                                                         n_jobs2=1)
+                                                         src_mode='cortical',
+                                                         n_jobs1=15,
+                                                         n_jobs2=2)
 
 #%% Bem setup
 mne_bem_files = sourcespace_setup.make_bem_multiple(sublist=MR_id,
@@ -130,6 +130,61 @@ mne_bem_files = sourcespace_setup.make_bem_multiple(sublist=MR_id,
                                                         outdir=join(MAINDIR, 'bem'),
                                                         single_layers=True,
                                                         n_jobs1=20)
+
+#%%
+# trans bem src
+MEG_id = RED_id
+path_out = MAINDIR
+transdir = join(path_out, 'coreg')
+trans = []
+bemdir = join(path_out, 'bem')
+bems = []
+srcdir = join(path_out, 'src_space')
+srcs = []
+megfs = []
+# loop through ids and add in order
+for fid, mrid, megf in zip(MEG_id, MR_id, MEG_fname):
+    base_no = fid
+
+    # Trans file
+    tmp = [f for f in listdir(transdir) if base_no in f]
+    if len(tmp)> 0:
+        trans.append(join(transdir,tmp[0]))
+    else:
+        print(f'{base_no} does not have trans file' )
+        continue
+
+    # Bemfile
+    tmp = [f for f in listdir(bemdir) if mrid in f]
+    tmp = [f for f in tmp if 'sol' in f]
+    if len(tmp)> 0:
+        bems.append(join(bemdir,tmp[0]))
+    else:
+        print(f'{base_no} does not have bem file' )
+        del trans[-1]
+        continue
+    #src space file
+    tmp = [f for f in listdir(srcdir) if mrid in f]
+    tmp = [f for f in tmp if 'cortical' in f]
+    if len(tmp)> 0:
+        srcs.append(join(srcdir,tmp[0]))
+    else:
+        print(f'{base_no} does not have src file' )
+        del trans[-1]
+        del bems[-1]
+        continue
+    megfs.append(join(path_out, 'preprocessed', megf))
+
+#%% Now thats done generate the stuff
+
+invfiles = sourcespace_setup.make_inv_multiple(rawfs=megfs,
+                                               transfs=trans,
+                                               bemfs=bems,
+                                               srcfs=srcs,
+                                               outdir=join(path_out, 'invs'),
+                                               njobs=15)
+
+
 
 #%% Compute covariance, forward model etc
 fs_subdir = join(STRUCTDIR, "FS_SUBDIR")

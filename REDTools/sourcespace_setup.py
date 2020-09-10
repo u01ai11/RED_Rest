@@ -192,14 +192,17 @@ def __make_inv_individual(rawf, transf, bemf, srcf, outdir):
     if os.path.isfile(tmpath):
         print(f'{tmpid}_inv.fif already exists, skipping')
         return tmpath
-    raw = mne.io.read_raw_fif(rawf)
-    cov = mne.compute_raw_covariance(raw)
-    src = mne.read_source_spaces(srcf)
-    bem = mne.read_bem_solution(bemf)
-    fwd = mne.make_forward_solution(raw.info, transf, src, bem)
-    inv = mne.minimum_norm.make_inverse_operator(raw.info, fwd, cov)
-    del fwd, src
+    try:
+        raw = mne.io.read_raw_fif(rawf)
+        cov = mne.compute_raw_covariance(raw)
+        src = mne.read_source_spaces(srcf)
+        bem = mne.read_bem_solution(bemf)
+        fwd = mne.make_forward_solution(raw.info, transf, src, bem)
+        inv = mne.minimum_norm.make_inverse_operator(raw.info, fwd, cov)
+        del fwd, src
 
-    mne.minimum_norm.write_inverse_operator(f'{outdir}/{tmpid}_inv.fif',inv)
+        mne.minimum_norm.write_inverse_operator(f'{outdir}/{tmpid}_inv.fif',inv)
+    except:
+        print('error')
     return tmpath
 

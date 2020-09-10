@@ -14,7 +14,7 @@ from REDTools import preprocess
 #%% run maxfilter
 resting_path = '/imaging/ai05/RED/RED_MEG/resting'
 outpath = os.path.join(resting_path, 'MaxFiltered')
-
+#%%
 for i in range(len(os.listdir(f'{resting_path}/raw'))):
 
     target_file = os.listdir(f'{resting_path}/raw')[i]
@@ -75,10 +75,21 @@ flist = [f for f in os.listdir(outpath) if 'fif' in f]
 indir = outpath
 outdir = os.path.join(resting_path, 'preprocessed')
 scriptpath = os.path.join(resting_path, 'cluster_scripts')
-pythonpath = '/imaging/local/software/miniconda/envs/mne0.19/bin/python'
-overwrite = False
+pythonpath = '/home/ai05/.conda/envs/mne_2/bin/python'
+overwrite = True
 preprocess.preprocess_cluster(flist, indir, outdir, scriptpath, pythonpath ,overwrite)
 
+#%% preprocess Amy
+indir = os.path.join('/imaging/ai05/RED/RED_MEG/', 'ace_resting', 'MaxFiltered_Amy')
+outdir = os.path.join('/imaging/ai05/RED/RED_MEG/', 'ace_resting', 'preprocessed')
+flist = [f for f in os.listdir(indir) if 'fif' in f]
+preprocess.preprocess_cluster(flist, indir, outdir, scriptpath, pythonpath ,overwrite)
+
+#%% rename files for amy (oops)
+flist = [f for f in os.listdir(outdir) if 'fif' in f]
+for f in flist:
+    newname = f'{f.split("_")[0]}_clean_raw.fif'
+    os.system(f'mv {os.path.join(outdir, f)} {os.path.join(outdir, newname)}')
 #%%filenames for manual ica -- where components of blinks etc are not clear
 man_ica = [f for f in os.listdir(outdir) if 'no' in f]
 i = 0
@@ -95,7 +106,7 @@ comps[1].savefig('/home/ai05/comp2.png')
 raw.plot(start=120).savefig('/home/ai05/raw1.png')
 print(man_ica[i])
 #%% change inds and decide
-ica.exclude =[1,7]
+ica.exclude =[0,4]
 ica.apply(raw)
 # if you need to plot the channels
 raw.plot(start=120).savefig('/home/ai05/raw2.png')

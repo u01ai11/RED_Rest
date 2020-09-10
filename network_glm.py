@@ -22,6 +22,17 @@ import scipy
 #%% Start with ACE networks, as we have matched behavioural measures for this data
 # We will only use the high beta, as this has the most accurate AEC networks
 
+
+# sum of all possible paths between connections in strucutral connectome is related to functional connectome
+
+"""
+https://en.wikipedia.org/wiki/Wilson–Cowan_model 
+From Kanad Mandke to Everyone: (2:11 pm)
+ Tewarie, P. K., Bright, M. G., Hillebrand, A., Robson, S. E., Gascoyne, L. E., Morris, P. G., … Brookes, M. J. (2016). Predicting haemodynamic networks using electrophysiology: The role of non-linear and cross-frequency interactions. NeuroImage, 130, 273–292. https://doi.org/10.1016/j.neuroimage.2016.01.053 Hunt, B. A. E., Tewarie, P. K., Mougin, O. E., Geades, N., Jones, D. K., Singh, K. D., … Brookes, M. J. (2016). Relationships between cortical myeloarchitecture and electrophysiological networks. Proceedings of the National Academy of Sciences, 113(47), 13510–13515. https://doi.org/10.1073/pnas.1608587113 
+From Edwin Dalmaijer to Everyone: (2:22 pm)
+ https://doi.org/10.1038/ncomms10340 
+"""
+
 # Get info
 # Behavioural data
 path_amyfile = '/imaging/ai05/phono_oddball/complete_amy.csv'

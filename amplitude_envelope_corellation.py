@@ -33,7 +33,7 @@ RED_id, MR_id, MEG_fname = study_info.get_info()
 #%% define function for envelope corellations
 # input settings for this function and then run
 i = 4
-invdir = join(MAINDIR, 'inverse_ops')
+invdir = join(MAINDIR, 'invs')
 rawdir = join(MAINDIR, 'preprocessed')
 outdir = join(MAINDIR, 'envelope_cors')
 fsdir = join(MAINDIR, 'STRUCTURALS','FS_SUBDIR')

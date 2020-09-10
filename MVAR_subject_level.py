@@ -40,7 +40,7 @@ i = 3
 X = np.load(join(parcel_dir, parcel_files[i]))
 
 # we also probably want to filter our data slightly (use FIR)
-X = mne.filter.notch_filter(X, Fs=150, freqs=np.arange(50, 75, 50))
+#X = mne.filter.notch_filter(X, Fs=150, freqs=np.arange(50, 75, 50))
 
 # transpose
 X = X.transpose([1,2,0])
