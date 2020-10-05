@@ -86,7 +86,7 @@ for i in range(len(parcel_files)):
 
 #%% feed into GLM
 
-dat = glmtools.data.TrialGLMData(data=glm_data, dim_labels=['participants', 'parcel_drivers', 'parcel_recievers', 'frequency'])
+dat = glmtools.data.TrialGLMData(data=glm_data, dim_labels=['participants', 'source_nodes', 'target_nodes', 'frequency'])
 
 regs = list()
 contrasts = list()
@@ -113,7 +113,7 @@ contrasts.append(glmtools.design.Contrast(name='IQ',values=[0,0,1]))
 des = glmtools.design.GLMDesign.initialise(regs,contrasts)
 model = glmtools.fit.OLSModel( des, dat )
 
-
+np.save(join(outdir, 'MVAR_GLM_MODEL.npy'), model, allow_pickle=True)
 
 #%% For establishing stastical significance we need to use two types of permutation test
 # For the intercept we generate surrogate data, then permute for a null distribution
@@ -197,6 +197,9 @@ np.save(join(outdir, 'perm_{i}.npy'), null)
 
 def row_shuffle_perm(des, dat, type, dimension, perm, outdir):
     print(perm)
+
+    if isfile(join(outdir, f'shuffleperm_{dimension}_{perm}.npy')):
+        return join(outdir, f'shuffleperm_{dimension}_{perm}.npy')
     this_desmat = des.design_matrix.copy() # copy matrix
     this_des = copy.deepcopy(des) # deep copy object
     if type == 'shuffle':
@@ -221,13 +224,13 @@ def row_shuffle_perm(des, dat, type, dimension, perm, outdir):
     return join(outdir, f'shuffleperm_{dimension}_{perm}.npy')
 
 #%% use parellel to split up shuffle permutations
-perms = 1000
+perms = 5000
 for cont in [1,2]:
     saved_files = joblib.Parallel(n_jobs =10)(
         joblib.delayed(row_shuffle_perm)(des, dat, 'shuffle', cont, perm, outdir) for perm in range(perms))
 
 #%% check permutations are there for all of them
-perms = 1000
+perms = 5000
 missing_surr = []
 for i in range(perms):
     if isfile(join(outdir, f'perm_{i}.npy')) == False:
@@ -250,15 +253,19 @@ null = dynamics.single_perm(type='OLS', modes=25, filter='notch', outdir=join(ro
                             perm=failed_ind, metric='partial_directed_coherence')
 np.save(join(outdir, f'perm_{failed_ind}.npy'), null)
 #%% after this has completed, read the permutation data
-perms =1000
-nshape = list(model.get_tstats().shape)
-nshape.append(perms)
-nulls = np.zeros(nshape)
-for i in range(perms):
-    nulls[0,:,:,:,i] = np.load(join(outdir, f'perm_{i}.npy'))[0]
-    nulls[1,:,:,:,i] = np.load(join(outdir, f'shuffleperm_1_{i}.npy'))
-    nulls[2,:,:,:,i] = np.load(join(outdir, f'shuffleperm_2_{i}.npy'))
+nshape_surr = [1] + list(model.get_tstats().shape[1:4]) + [1000]
+null_surr = np.zeros(nshape_surr)
+for i in range(1000):
+    null_surr[0,:,:,:,i] = np.load(join(outdir, f'perm_{i}.npy'))[0]
 
+nshape_shuff = [2] + list(model.get_tstats().shape[1:4]) + [5000]
+null_shuff = np.zeros(nshape_shuff)
+for i in range(5000):
+    null_shuff[0,:,:,:,i] = np.load(join(outdir, f'shuffleperm_1_{i}.npy'))
+    null_shuff[1,:,:,:,i] = np.load(join(outdir, f'shuffleperm_2_{i}.npy'))
+
+np.save(join(outdir, 'MVAR_GLM_NULLS_surr.npy'), null_surr, allow_pickle=True)
+np.save(join(outdir, 'MVAR_GLM_NULLS_shuff.npy'), null_shuff, allow_pickle=True)
 #%% get threshold
 thresh = np.percentile(nulls, 95, axis=4)
 sig_= model.tstats >= thresh # mask for data
@@ -289,6 +296,7 @@ for i in range(len(labels)):
 
 # First, we reorder the labels based on their location in the left hemi
 lh_labels = [name for name in label_names if name.endswith('lh')]
+rh_labels = [name for name in label_names if name.endswith('rh')]
 
 # Get the y-location of the label
 label_ypos = list()
@@ -297,10 +305,20 @@ for name in lh_labels:
     ypos = np.mean(labels[idx].pos[:, 1])
     label_ypos.append(ypos)
 
-# get ordering map for the 34 parcelations on the left hemisphere
-sorted_ind = np.argsort[label_ypos]
+lh_labels = [label for (yp, label) in sorted(zip(label_ypos, lh_labels))]
 
+# For the right hemi
+rh_labels = [label[:-2] + 'rh' for label in lh_labels]
 
+# make a list with circular plot order
+node_order = list()
+node_order.extend(lh_labels[::-1])  # reverse the order
+node_order.extend(rh_labels)
+
+node_order = node_order[::-1] # reverse the whole thing
+
+# get a mapping to the original list
+re_order_ind = [label_names.index(x) for x in node_order]
 #%% Look at simple heatmaps
 contrast = 0
 frequency = 10
@@ -332,14 +350,25 @@ def hv_chord(contrast, frequency, threshold):
     links = pd.DataFrame(data)
 
     square = stats[contrast,:,:,frequency]
+
+
     #square = stats[contrast,:,:,:].sum(axis=2)
     thresh_mask = square > np.percentile(square, threshold)
     square[~thresh_mask] = 0
+
+    #reorder
+    X_sorted = np.copy(square)
+    # Sort along first dim
+    X_sorted = X_sorted[re_order_ind,:]
+    # Sort along second dim
+    X_sorted = X_sorted[:,re_order_ind]
+
+    labels_sorted = np.array(label_names)[re_order_ind]
     # loop through Y axis of matrix
     counter = 0
-    for i in range(square.shape[0]):
-        for ii in range(square.shape[1]):
-            links.loc[counter] = [i, ii, int(square[i,ii])]
+    for i in range(X_sorted.shape[0]):
+        for ii in range(X_sorted.shape[1]):
+            links.loc[counter] = [i, ii, int(X_sorted[i,ii])]
             counter +=1
 
     # make label index
@@ -351,8 +380,8 @@ def hv_chord(contrast, frequency, threshold):
     data = np.empty(0, dtype=dtypes)
     nodes = pd.DataFrame(data)
 
-    for i in range(square.shape[0]):
-        nodes.loc[i] = [label_names[i], 1]
+    for i in range(X_sorted.shape[0]):
+        nodes.loc[i] = [labels_sorted[i], 1]
 
     graph = hv.Chord((links, hv.Dataset(nodes, 'index')))
     graph.opts(
@@ -360,55 +389,29 @@ def hv_chord(contrast, frequency, threshold):
                    labels='name', node_color=dim('index').str())
     )
     graph.relabel('Directed Graph').opts(directed=True)
-    graph.opts(title=f'Partial Directed Coherence @ {freq_vect[frequency]}Hz')
+    graph.opts(title=f'{des.contrast_names[contrast]} Partial Directed Coherence @ {int(freq_vect[frequency])}Hz')
     return graph
 
 #%%
 renderer = hv.renderer('bokeh')
-hv.output(size=200)
+hv.output(size=250)
 #%%  try one
-graph = hv_chord(1, 30, 90).opts(directed=True, title='MVAR Age 64Hz')
-renderer.save(graph, join(figdir, 'chord_MVAR_Age'))
+threshold = 90
+contrast = 1
+frequency = 20
+
+graph = hv_chord(contrast, frequency, threshold).opts(directed=True,
+                                                      title=f'MVAR {des.contrast_names[contrast]} {int(freq_vect[frequency])}Hz')
+renderer.save(graph, join(figdir, 'chord_MVAR_test'))
 
 #%% animated graph to represent frequency
 freq_range = [0, 5, 10, 15, 20, 25, 30, 35]
 start = 0
 end = 36
-hmap = hv.HoloMap({i: hv_chord(0, i, 90) for i in freq_range})
+hmap = hv.HoloMap({i: hv_chord(2, i, 90) for i in freq_range})
 
 #%%
 plot = renderer.get_plot(hmap)
-#%%
-def animate_update():
-    freq = slider.value + 1
-    if freq > end:
-        freq = start
-    slider.value = freq
-
-def slider_update(attrname, old, new):
-    plot.update(slider.value)
-
-slider = Slider(start=start, end=end, value=0, step=1, title="Year")
-slider.on_change('value', slider_update)
-
-def animate():
-    if button.label == '► Play':
-        button.label = '❚❚ Pause'
-        curdoc().add_periodic_callback(animate_update, 200)
-    else:
-        button.label = '► Play'
-        curdoc().remove_periodic_callback(animate_update)
-
-button = Button(label='► Play', width=60)
-button.on_click(animate)
-
-# Combine the bokeh plot on plot.state with the widgets
-layout = layout([
-    [plot.state],
-    [slider, button],
-], sizing_mode='fixed')
-
-curdoc().add_root(layout)
 
 #%% save
-renderer.save(plot, join(figdir, 'chord_MVAR_intercept_animated'))
+renderer.save(plot, join(figdir, 'chord_MVAR_IQ_animated'))

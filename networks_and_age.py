@@ -5,7 +5,7 @@ from os import listdir as listdir
 from os.path import join
 import numpy as np
 sys.path.insert(0, '/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest')
-sys.path.insert(0, '/home/ai05/Downloads/glm')
+#sys.path.insert(0, '/home/ai05/Downloads/glm')
 from REDTools import plotting
 import glmtools
 import networkx as nx
@@ -139,40 +139,52 @@ model = glmtools.fit.OLSModel( des, dat )
 # unflatten t-stats
 #make empty connectivity matrix for mask
 tstats = np.empty(in_struct[0].shape)
+tstats2 = np.empty(in_struct[0].shape)
 #get indices of lower triangle
 i_low = np.tril_indices(tstats.shape[0], -1)
 # assign mask values
 tstats[i_low] = model.tstats[1]
+tstats2[i_low] = model.tstats[0]
 # Copy lower triangle to upper triangle to make the matrix symmertical.
 tstats.T[i_low] = tstats[i_low]
+tstats2.T[i_low] = tstats2[i_low]
 
 #%% permute
-P = glmtools.permutations.Permutation(des, dat, 1, 1000, metric='tstats' )
+P = glmtools.permutations.Permutation(design=des, data=dat, contrast_idx=1, nperms=5000, metric='tstats', nprocesses=10)
 thresh = P.get_thresh(95) #  Thresh is a 12x12 matrix
 sig_simple = model.tstats[1,...] >= thresh
 
+#%% permute intersepct
+P2 = glmtools.permutations.Permutation(design=des, data=dat, contrast_idx=0, nperms=5000, metric='tstats', nprocesses=10)
+thresh2 = P2.get_thresh(95) #  Thresh is a 12x12 matrix
+sig_simple2 = model.tstats[0,...] >= thresh2
 #%% recreate triangle and work out nodes/parcellations that have connections most linked with age
 
 #make empty connectivity matrix for mask
 mask = np.zeros(in_struct[0].shape, dtype=bool)
+mask2 = np.zeros(in_struct[0].shape, dtype=bool)
 # assign mask values
 mask[i_low] = sig_simple
+mask2[i_low] = sig_simple2
 # Copy lower triangle to upper triangle to make the matrix symmertical.
 mask.T[i_low] = mask[i_low]
+mask2.T[i_low] = mask2[i_low]
 
 #mask of our t values
 age_glm_results = tstats
 age_glm_results[[~mask]] = 0
 
+intercept_glm_results = tstats2
+intercept_glm_results[[~mask2]] = 0
 #%% now get some degree info for these nodes
 #read into netwokx
 age_graph = nx.from_numpy_matrix(age_glm_results)
-
+intercept_graph = nx.from_numpy_matrix(intercept_glm_results)
 x_connec = 2 # threshold for no connections
 
 degree = age_graph.degree() # get node degree
-age_nodes = [f[0] for f in list(degree) if f[1] > x_connec] # get indices of nodes with more than two connections
-
+#age_nodes = [f[0] for f in list(degree) if f[1] > x_connec] # get indices of nodes with more than two connections
+age_nodes = [f[0] for f in list(degree) if f[1]]
 #get weighted degree for those nodes
 weighted_deg = np.array([list(age_graph.degree(weight='weight'))[i][1] for i in age_nodes])
 
@@ -190,7 +202,8 @@ age_node_values = [list(degree)[i] for i in age_nodes]
 np.save('/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest/age_nodes.npy', age_nodes)
 np.save('/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest/age_node_names.npy', age_node_names)
 np.save('/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest/age_node_vals.npy', age_node_values)
-
+nx.write_gpickle(age_graph, '/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest/age_graph.npy')
+nx.write_gpickle(intercept_graph, '/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest/intercept_graph.npy')
 #%% plot results to determine areas
 
 plt.close('all')
