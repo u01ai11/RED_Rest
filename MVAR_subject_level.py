@@ -182,8 +182,30 @@ plt.close(f)
 #%% looks like 20 is probably an acceptable number of modes
 # loop through this and do for all participants in parallel
 joblib.Parallel(n_jobs =20)(
-    joblib.delayed(dynamics.MVAR_single)(i,'OLS',25, 'notch',
+    joblib.delayed(MVAR_single)(i,'OLS',25, 'notch',
                                         join(root_dir,'resting', 'MVAR'),
                                         parcel_dir, parcel_files, 150,
                                         'partial_directed_coherence') for i in range(len(parcel_files)))
 
+#%% loop
+for i in range(len(parcel_files)):
+    print(i)
+    MVAR_single(i,'OLS',25, 'notch',
+                         join(root_dir,'resting', 'MVAR'),
+                         parcel_dir, parcel_files, 150,
+                         'partial_directed_coherence')
+
+type= 'OLS'; modes=25; filter='notch'; outdir=join(root_dir,'resting', 'MVAR'); sample_rate = 150;metric ='partial_directed_coherence'
+
+
+#%% check if passed
+
+made = []
+low_rank_ids = []
+for i in range(len(parcel_files)):
+    id_ = parcel_files[i].split('_')[0]
+    made.append(isfile(join(outdir, f'mvar_OLS_{id_}.npy')))
+    if made[i] == False:
+        low_rank_ids.append(id_)
+#%%
+np.save(join(root_dir, 'resting', 'low_rank_IDs.npy'), low_rank_ids)

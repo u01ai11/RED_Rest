@@ -1,6 +1,8 @@
 import mne
 import matplotlib.pyplot as plt
+from matplotlib import cm
 from nilearn import plotting
+from nilearn import  datasets
 import pandas as pd
 import sys
 import time
@@ -13,6 +15,7 @@ import numpy as np
 import holoviews as hv
 hv.extension('bokeh')
 from holoviews import opts, dim
+from matplotlib import patches
 
 def plot_aparc_parcels(matrix, ax, fig, title):
     """
@@ -167,3 +170,60 @@ def get_labels():
     re_order_ind = [label_names.index(x) for x in node_order]
 
     return labels, label_names, re_order_ind
+
+def plot_roi(names):
+    labels = mne.read_labels_from_annot('fsaverage_1', parc='aparc', subjects_dir=join('/imaging/ai05/RED/RED_MEG/resting/STRUCTURALS','FS_SUBDIR'))
+    #labels = labels[0:-1]
+    label_names = [label.name for label in labels]
+
+    #names = ['lingual-lh', 'parahippocampal-lh', 'parahippocampal-rh']
+
+    ninds = [label_names.index(i) for i in names]
+
+
+    # nilearn parcellation is a list representing each vertex, do left and right seperatl
+    # MNE labels are a list representing the index of each vertex the parcel contains
+
+    parcellation = np.zeros([10242])
+    names_cmap_inds = []
+    for i in range(len(names)):
+        vinds = labels[ninds[i]].get_vertices_used()
+        names_cmap_inds.append(i+1)
+        for ii in vinds:
+            parcellation[ii] = i+1
+
+
+
+    fsaverage = datasets.fetch_surf_fsaverage()
+
+    cmap = cm.get_cmap('gist_ncar')
+    legend_elements = [patches.Patch(facecolor=cmap(x), edgecolor=cmap(x), label=y) for x,y in zip(names_cmap_inds, names)]
+
+    fig, ax = plt.subplots(2,2, subplot_kw={'projection': '3d'})
+    plotting.plot_surf_roi(fsaverage['pial_left'], roi_map=parcellation,
+                           hemi='left', view='medial',
+                           bg_map=fsaverage['sulc_left'], bg_on_data=True,
+                           darkness=.5, axes=ax[0,0], title= 'Left Hemisphere Medial',
+                           cmap=cmap)
+
+    plotting.plot_surf_roi(fsaverage['pial_right'], roi_map=parcellation,
+                           hemi='right', view='medial',
+                           bg_map=fsaverage['sulc_right'], bg_on_data=True,
+                           darkness=.5, axes=ax[0,1], title= 'Right Hemisphere Medial',
+                           cmap=cmap)
+
+    plotting.plot_surf_roi(fsaverage['pial_left'], roi_map=parcellation,
+                           hemi='left', view='lateral',
+                           bg_map=fsaverage['sulc_left'], bg_on_data=True,
+                           darkness=.5, axes=ax[1,0], title= 'Left Hemisphere Lateral',
+                           cmap=cmap)
+
+    plotting.plot_surf_roi(fsaverage['pial_right'], roi_map=parcellation,
+                           hemi='right', view='lateral',
+                           bg_map=fsaverage['sulc_right'], bg_on_data=True,
+                           darkness=.5, axes=ax[1,1], title= 'Right Hemisphere Lateral',
+                           cmap=cmap)
+
+    fig.legend()
+    plt.subplots_adjust(right=0.85)
+    return [fig, ax]

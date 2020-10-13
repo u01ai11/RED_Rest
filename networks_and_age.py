@@ -154,7 +154,7 @@ P = glmtools.permutations.Permutation(design=des, data=dat, contrast_idx=1, nper
 thresh = P.get_thresh(95) #  Thresh is a 12x12 matrix
 sig_simple = model.tstats[1,...] >= thresh
 
-#%% permute intersepct
+#% permute intersepct
 P2 = glmtools.permutations.Permutation(design=des, data=dat, contrast_idx=0, nperms=5000, metric='tstats', nprocesses=10)
 thresh2 = P2.get_thresh(95) #  Thresh is a 12x12 matrix
 sig_simple2 = model.tstats[0,...] >= thresh2
@@ -176,6 +176,16 @@ age_glm_results[[~mask]] = 0
 
 intercept_glm_results = tstats2
 intercept_glm_results[[~mask2]] = 0
+
+combined_glm_results = np.zeros([2,68,68])
+combined_glm_results[0,:,:] = intercept_glm_results
+combined_glm_results[1,:,:] = age_glm_results
+
+np.save('/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest/MRI_GLM_RESULTS.npy', combined_glm_results)
+#%% load results
+combined_glm_results = np.load('/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest/MRI_GLM_RESULTS.npy')
+intercept_glm_results = combined_glm_results[0,:,:]
+age_glm_results = combined_glm_results[1,:,:]
 #%% now get some degree info for these nodes
 #read into netwokx
 age_graph = nx.from_numpy_matrix(age_glm_results)
@@ -198,6 +208,8 @@ age_node_names = [label_names[i] for i in age_nodes] # names
 age_node_values = [list(degree)[i] for i in age_nodes]
 
 #%% save results
+np.save('/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest/age_nodes.npy', age_nodes)
+np.save('/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest/age_node_names.npy', age_node_names)
 
 np.save('/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest/age_nodes.npy', age_nodes)
 np.save('/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest/age_node_names.npy', age_node_names)

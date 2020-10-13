@@ -49,6 +49,12 @@ def MVAR_single(ind, type, modes, filter, outdir, parcel_dir, parcel_files, samp
     # create delay vector from modes
     delay_vect = np.arange(modes)
 
+    # try to orthoganlise
+    try:
+        X[:,:,0] = sails.orthogonalise.symmetric_orthonormal(X[:,:,0], maintain_mag=False)[0]
+    except:
+        print(f'failed othorganilsation for {id_}')
+
     # apply model
     if type == 'OLS':
         m = sails.OLSLinearModel.fit_model(X, delay_vect)
@@ -139,8 +145,10 @@ def surrogate_MVAR(perm, ind, type, modes, filter, outdir, parcel_dir, parcel_fi
     X[0,:,:] = X_surr # add to X
     #reshape as sails expects (nsignals, nsamples, ntrials)
     X = X.transpose([1,2,0])
-    # create delay vector from modes
 
+    # orthoganlise
+    X[:,:,0] = sails.orthogonalise.symmetric_orthonormal(X[:,:,0], maintain_mag=False)[0]
+    # create delay vector from modes
     delay_vect = np.arange(modes)
 
     # apply model

@@ -111,89 +111,138 @@ plt.savefig(join(figdir, f'test_vect_betas_IQ.png'))
 plt.close(fig)
  #%% Make stacked bar charts / Sankey graphs
 plt_stat = copy.deepcopy(stats)
-contrast = 1 # 0 = Intercept; 1 = Age; 2 = IQ
+contrast = 0 # 0 = Intercept; 1 = Age; 2 = IQ
 top_n = 68 # choose the top X connected parcels to plot
 color_n = 5 # top X parcels to be coloured
 rev_opt = False
-# make a matrix frequency * top_n matrix
-stacked = np.zeros([len(freq_vect), top_n])
-s_labels =[['']*top_n]*len(freq_vect) # make one to hold the labels for each value
-# for each frequency work out the top n parcels and the percentage of the top they possess
-
-for i in range(len(freq_vect)):
-    this_data = plt_stat[contrast, :,:,i].sum(axis=1) # sum accross outgoing connections
-     # order labels by magnitude
-    this_labels = [label for (yp, label) in sorted(zip(this_data, label_names), reverse=rev_opt)]
-    this_values = sorted(this_data, reverse=rev_opt)
-
-    #take top n parcels
-    if rev_opt == True:
-        this_labels = this_labels[0:top_n]
-        this_values = this_values[0:top_n]
-    else:
-        this_labels = this_labels[len(this_labels)-top_n:len(this_labels)]
-        this_values = this_values[len(this_values)-top_n:len(this_values)]
-
-    #percentage
-    this_perc = np.array([i/sum(this_values) for i in this_values])
-
-    stacked[i,:] = this_perc
-    s_labels[i] = this_labels
-
-N = len(freq_vect)
-ind = np.arange(N)    # the x locations for the groups
-width = 1       # the width of the bars: can also be len(x) sequence
-
-# generate a colour pallete for each unique label
-unique_parcels = list(np.unique(s_labels))
-# order them by the most frequent
-weights = []
-for uparc in unique_parcels: # loop through parcels
-    weights.append(stacked.transpose()[np.argwhere(np.array(s_labels) == uparc)].sum()) # append sum of values over all freq
-
-unique_parcels = [label for (yp, label) in sorted(zip(weights, unique_parcels), reverse=~rev_opt)]
-# get opnes to colour
-unique_parcels_colour = unique_parcels[0:color_n]
-unique_parcels_grey = unique_parcels[color_n:len(unique_parcels)]
-palette_c = sns.color_palette(None, len(unique_parcels_colour))
-palette_g = sns.color_palette('husl', len(unique_parcels_grey), desat=0)
-
-#generate a legend based on these colours
-legend_elements = [patches.Patch(facecolor=x, edgecolor=x, label=y) for x,y in zip(palette_c, unique_parcels_colour)]
-
-palette = palette_c + palette_g
-
-# frequency labels
-freq_labels = [f'{int(x)}Hz' for x in freq_vect]
-
-fig, ax = plt.subplots(figsize=(20, 6))
-plts = []
-bottoms = stacked[:,0]
-for i in range(top_n):
-    # get colours for each bar
-    these_labels = [x[i] for x in s_labels]
-    these_inds = [unique_parcels.index(x) for x in these_labels]
-    these_colours = np.array(palette)[these_inds]
-    if i == 0:
-        tmp_plt = ax.bar(freq_labels, stacked[:,i], width,
-                         color=these_colours,
-                         label=str(i))
-    else:
-        tmp_plt = ax.bar(freq_labels, stacked[:,i],width,
-                         color=these_colours,
-                          bottom=bottoms,
-                         label=str(i))
-        bottoms = bottoms + stacked[:,i]
-
-ax.legend(handles=legend_elements, bbox_to_anchor=(1, 1), loc='upper left')
-ax.set_title(f'Outgoing Connections corellated with {model.contrast_names[contrast]} by Parcel')
-ax.set_xlabel('Frequency Band')
-ax.set_ylabel('Proportion of total outgoing connections')
-plt.autoscale()
-plt.savefig(join(figdir, f'freq_stacked_bar_{model.contrast_names[contrast]}'))
-plt.close(fig)
+direction = 1 # 1 = outgoing, 0 = ingoing
 
 
+def plot_stacked(plt_stat, contrast, top_n, color_n, rev_opt, direction, freq_vect, label_names, cust_name):
+    """
+    :param plt_stat:
+        Stats to create the plot, must be a contast x parcel x parcel x frequency array
+    :param contrast:
+        The contrast from the GLM we want to plot
+    :param top_n:
+        The top n parcels included in the plot
+    :param color_n:
+        N parcels we want to be coloured
+    :param rev_opt:
+        Reverese the order of the plot
+    :param direction:
+        Are we measuring ingoing or outgoing connections
+    :param freq_vect:
+        Frequency vector
+    :param label_names:
+        Names of the n parcels included in the data
+    :return:
+    """
+
+    # make a matrix frequency * top_n matrix
+    stacked = np.zeros([len(freq_vect), top_n])
+    s_labels =[['']*top_n]*len(freq_vect) # make one to hold the labels for each value
+    # for each frequency work out the top n parcels and the percentage of the top they possess
+
+    for i in range(len(freq_vect)):
+        this_data = plt_stat[contrast, :,:,i].sum(axis=direction) # sum accross outgoing connections
+         # order labels by magnitude
+        this_labels = [label for (yp, label) in sorted(zip(this_data, label_names), reverse=rev_opt)]
+        this_values = sorted(this_data, reverse=rev_opt)
+
+        #take top n parcels
+        if rev_opt == True:
+            this_labels = this_labels[0:top_n]
+            this_values = this_values[0:top_n]
+        else:
+            this_labels = this_labels[len(this_labels)-top_n:len(this_labels)]
+            this_values = this_values[len(this_values)-top_n:len(this_values)]
+
+        #percentage
+        this_perc = np.array([i/sum(this_values) for i in this_values])
+
+        stacked[i,:] = this_perc
+        s_labels[i] = this_labels
+
+    N = len(freq_vect)
+    ind = np.arange(N)    # the x locations for the groups
+    width = 1       # the width of the bars: can also be len(x) sequence
+
+    # generate a colour pallete for each unique label
+    unique_parcels = list(np.unique(s_labels))
+    # order them by the most frequent
+    weights = []
+    for uparc in unique_parcels: # loop through parcels
+        weights.append(stacked.transpose()[np.argwhere(np.array(s_labels) == uparc)].sum()) # append sum of values over all freq
+
+    unique_parcels = [label for (yp, label) in sorted(zip(weights, unique_parcels), reverse=~rev_opt)]
+    # get opnes to colour
+    unique_parcels_colour = unique_parcels[0:color_n]
+    unique_parcels_grey = unique_parcels[color_n:len(unique_parcels)]
+    palette_c = sns.color_palette(None, len(unique_parcels_colour))
+    palette_g = sns.color_palette('husl', len(unique_parcels_grey), desat=0)
+
+    #generate a legend based on these colours
+    legend_elements = [patches.Patch(facecolor=x, edgecolor=x, label=y) for x,y in zip(palette_c, unique_parcels_colour)]
+
+    palette = palette_c + palette_g
+
+    # frequency labels
+    freq_labels = [f'{int(x)}Hz' for x in freq_vect]
+
+    fig, ax = plt.subplots(figsize=(20, 6))
+    plts = []
+    bottoms = stacked[:,0]
+    for i in range(top_n):
+        # get colours for each bar
+        these_labels = [x[i] for x in s_labels]
+        these_inds = [unique_parcels.index(x) for x in these_labels]
+        these_colours = np.array(palette)[these_inds]
+        if i == 0:
+            tmp_plt = ax.bar(freq_labels, stacked[:,i], width,
+                             color=these_colours,
+                             label=str(i))
+        else:
+            tmp_plt = ax.bar(freq_labels, stacked[:,i],width,
+                             color=these_colours,
+                              bottom=bottoms,
+                             label=str(i))
+            bottoms = bottoms + stacked[:,i]
+
+    ax.legend(handles=legend_elements, bbox_to_anchor=(1, 1), loc='upper left')
+    ax.set_title(f'{cust_name} Connections corellated with {model.contrast_names[contrast]} by Parcel')
+    ax.set_xlabel('Frequency Band')
+    ax.set_ylabel('Proportion of total outgoing connections')
+    plt.autoscale()
+    plt.savefig(join(figdir, f'freq_stacked_bar_{model.contrast_names[contrast]}_{cust_name}'))
+    plt.close(fig)
+
+#%% plot the different graphs
+
+stacked_args = dict(plt_stat = copy.deepcopy(stats),top_n=68,color_n=6,rev_opt=False, freq_vect=freq_vect, label_names=label_names)
+
+
+plot_stacked(**stacked_args, contrast=0, direction=1, cust_name='Outgoing')
+plot_stacked(**stacked_args, contrast=0, direction=0, cust_name='Incoming')
+
+plot_stacked(**stacked_args, contrast=1, direction=1, cust_name='Outgoing')
+plot_stacked(**stacked_args, contrast=1, direction=0, cust_name='Incoming')
+
+plot_stacked(**stacked_args, contrast=2, direction=1, cust_name='Outgoing')
+plot_stacked(**stacked_args, contrast=2, direction=0, cust_name='Incoming')
+
+#%% have a look at the results for MRI
+MR_glm_results = np.load('/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest/MRI_GLM_RESULTS.npy')
+MRstats = np.zeros([2,68,68,1])
+MRstats[:,:,:,0] = MR_glm_results
+stacked_args = dict(plt_stat = MRstats,top_n=68,color_n=6,rev_opt=False, freq_vect=[0], label_names=label_names)
+plot_stacked(**stacked_args, contrast=0, direction=0, cust_name='MRI')
+plot_stacked(**stacked_args, contrast=1, direction=0, cust_name='MRI')
+
+#%% chord plot
+
+mr_chord = red_plotting.hv_chord(1, 0,  0, MRstats, re_order_ind, label_names, model, freq_vect)
+renderer.save(mr_chord, join(figdir, 'chord_MR_age'))
 #%% plot ROI's from above on a brain
 
 
@@ -225,8 +274,8 @@ intercept_mri_graph = nx.read_gpickle('/imaging/ai05/RED/RED_MEG/resting/analysi
 
 #%% Look at the MEG connectomes
 connec_thresh = 6
-contrast = 1
-metric = 1
+contrast = 2
+metric = 2
 MEG_deg = np.zeros([stats.shape[1], 4, len(freq_vect)])
 
 for i in range(len(freq_vect)):
@@ -246,6 +295,14 @@ meg_sorted_names = [label for (yp, label) in sorted(zip(meg_rank, label_names), 
 
 
 ss.stats.spearmanr(mri_rank, meg_rank)
+#%% plot top MEG brain areas
+
+for i in range(5):
+    fig, ax = plot_roi([meg_sorted_names[i]])
+    plt.savefig(join(figdir, f'{meg_sorted_names[i]}.png'))
+    plt.close('all')
+
+
 #%%
 
 metric = 2
