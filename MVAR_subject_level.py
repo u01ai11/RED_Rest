@@ -15,6 +15,8 @@ import random
 import copy
 import pandas as pd
 import os
+from REDTools import plotting as red_plotting
+import scipy.stats as ss
 #%%
 root_dir = '/imaging/ai05/RED/RED_MEG' # the root directory for the project
 figdir = '/imaging/ai05/images'
@@ -28,6 +30,67 @@ meta = pd.read_csv(meta_dat_path)
 tmp_id = meta.Alex_ID.to_list()# get IDS
 tmp_id = [str(f).replace('_','-') for f in tmp_id] # replace to match filenames
 meta.Alex_ID = tmp_id
+
+#%% make welch's periodograms for the parcel timecourses
+ch_names = red_plotting.get_labels()[1]
+#%%
+fmin = 0
+fmax = 75
+average = False
+sample_rate = 150 # sample rate
+delays = 25
+freq_vect = np.linspace(0, sample_rate/2, 36) #frequency vector representing the model metrics
+
+i = 0
+
+for i in range(len(parcel_files)):
+    # load array
+    X = np.load(join(parcel_dir, parcel_files[i]))
+    # labels
+
+    X = mne.filter.notch_filter(X, Fs=150, freqs=np.arange(50, 75, 50))
+
+    # transpose
+    X = X.transpose([1,2,0])
+
+    try:
+        X[:,:,0] = sails.orthogonalise.symmetric_orthonormal(X[:,:,0], maintain_mag=False)[0]
+    except:
+        print('full_rank_error')
+
+
+
+
+    info = mne.create_info(ch_names=ch_names, ch_types='mag', sfreq=150)
+    raw = mne.io.RawArray(X[:,:,0], info)
+
+
+
+    delay_vect = np.arange(delays)
+    #m = sails.OLSLinearModel.fit_model(X, delay_vect)
+    m = sails.VieiraMorfLinearModel.fit_model(X, delay_vect)
+    Fo = sails.mvar_metrics.FourierMvarMetrics.initialise(m, sample_rate, freq_vect)
+    #ar_spec = sails.mvar_metrics.ar_spectrum(m.parameters, m.resid_cov, sample_rate, freq_vect)
+    ar_spec = Fo.PSD
+    # square each power value then divide by frequency
+    plt_spec = ar_spec[:,:,:,0].reshape(ar_spec.shape[0]*ar_spec.shape[1],ar_spec.shape[2]).transpose([1,0])
+    plt_spec = np.divide(np.square(plt_spec), np.array([freq_vect]*ar_spec.shape[0]*ar_spec.shape[1]).transpose())
+
+    fig, axs = plt.subplots(3)
+    raw.plot_psd(fmin=fmin, fmax=fmax, average=average, ax=axs[0])
+    axs[1].set_yscale('log', nonposy='clip')
+    axs[2].set_yscale('log', nonposy='clip')
+
+    axs[1].plot(plt_spec)
+
+    mean_spec = np.nanmean(plt_spec, axis=1)
+    std_spec = np.nanstd(plt_spec, axis=1)
+    axs[2].plot(mean_spec,'k-')
+    axs[2].fill_between(list(range(plt_spec.shape[0])),plt_spec.min(axis=1), plt_spec.max(axis=1))
+
+    plt.savefig(join(figdir, 'PSD_parcels',f'psd_{i}_VM.png'))
+    plt.close('all')
+
 #%% coherence analysis on one participant
 
 # define some information about our data
@@ -40,7 +103,7 @@ i = 3
 X = np.load(join(parcel_dir, parcel_files[i]))
 
 # we also probably want to filter our data slightly (use FIR)
-#X = mne.filter.notch_filter(X, Fs=150, freqs=np.arange(50, 75, 50))
+X = mne.filter.notch_filter(X, Fs=150, freqs=np.arange(50, 75, 50))
 
 # transpose
 X = X.transpose([1,2,0])
@@ -179,13 +242,26 @@ ax[1].plot(welch[0], compare_spectrum[1])
 
 plt.savefig(join(figdir, f'compare_spectra_parcel_{parcel_ind}_{mod}_delays_{delays}.png'))
 plt.close(f)
+
+#%% We need to exclude some parcels from the data, due to rank issues (Maxfilter leads to scan data being rank 64,
+#%% ICA denoising reduces rank further, then parcels end up being linear combinations of each other
+
+# get rid of limbic/cingulate brain regions
+removelist = ['isthmuscingulate', 'posteriorcingulate', 'caudalanteriorcingulate', 'rostralanteriorcingulate', 'parahippocampal',
+              'entorhinal', 'fusiform']
+labels, label_names, re_order_ind = red_plotting.get_labels()
+removelabels = [f for f in label_names if len([i for i in removelist if i in f]) > 0]
+removeinds = [label_names.index(i) for i in removelabels]
+
 #%% looks like 20 is probably an acceptable number of modes
 # loop through this and do for all participants in parallel
 joblib.Parallel(n_jobs =20)(
     joblib.delayed(MVAR_single)(i,'OLS',25, 'notch',
                                         join(root_dir,'resting', 'MVAR'),
                                         parcel_dir, parcel_files, 150,
-                                        'partial_directed_coherence') for i in range(len(parcel_files)))
+                                        'partial_directed_coherence',
+                                        [],
+                                        True) for i in range(len(parcel_files)))
 
 #%% loop
 for i in range(len(parcel_files)):

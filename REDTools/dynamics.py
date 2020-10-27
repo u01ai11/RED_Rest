@@ -9,7 +9,7 @@ import joblib
 from numpy import random
 
 
-def MVAR_single(ind, type, modes, filter, outdir, parcel_dir, parcel_files, sample_rate, metric):
+def MVAR_single(ind, type, modes, filter, outdir, parcel_dir, parcel_files, sample_rate, metric, parcel_exclude, overwrite):
 
     """
     Runs a multivariate auto-regression on timefrequency data, and saves the output
@@ -22,6 +22,9 @@ def MVAR_single(ind, type, modes, filter, outdir, parcel_dir, parcel_files, samp
     :param parcel_dir: the directory to find the parcel timecourse files
     :param parcel_files: a list of parcel files to use as data input
     :param sample_rate: sample rate of the data
+    :param metric: the metric to use
+    :param parcel_exclude: list of parcels index to remove
+    :param overwrite: True or False to overwrite file
     :return: returns the model parameters fourier metrics, and the model itself
 
     """
@@ -29,15 +32,21 @@ def MVAR_single(ind, type, modes, filter, outdir, parcel_dir, parcel_files, samp
 
     #id
     id_ = parcel_files[ind].split('_')[0]
-    if isfile(join(outdir, f'mvar_{type}_{id_}.npy')):
-        print('file exists, skipping')
-        return
+    if overwrite == False:
+        if isfile(join(outdir, f'mvar_{type}_{id_}.npy')):
+            print('file exists, skipping')
+            return
     X = np.load(join(parcel_dir, parcel_files[ind]))
+
+    if len(parcel_exclude) > 0:
+        X = np.delete(X,parcel_exclude,1)
+
+
     if filter == 'notch':
-        X = mne.filter.notch_filter(X, Fs=sample_rate, freqs=np.arange(50, 75, 50))
+        X = mne.filter.notch_filter(X, Fs=sample_rate, freqs=np.arange(50, 75, 50), verbose=True)
     elif type(filter) == tuple:
         # we also probably want to filter our data slightly (use FIR)
-        X = mne.filter.filter_data(X, sfreq=sample_rate, l_freq=filter[0], h_freq=filter[1])
+        X = mne.filter.filter_data(X, sfreq=sample_rate, l_freq=filter[0], h_freq=filter[1], verbose=True)
     else:
         print(f'{filter} is an unrecognised filter, not filtering')
 
@@ -72,6 +81,7 @@ def MVAR_single(ind, type, modes, filter, outdir, parcel_dir, parcel_files, samp
 
     # save to file
     # get name
+    print(ind)
     np.save(join(outdir, f'mvar_{type}_{id_}.npy'),out)
     return Fo, m
 
@@ -105,10 +115,10 @@ def surrogate_MVAR(perm, ind, type, modes, filter, outdir, parcel_dir, parcel_fi
     if perm == 0:
 
         if filter == 'notch':
-            X = mne.filter.notch_filter(X, Fs=sample_rate, freqs=np.arange(50, 75, 50))
+            X = mne.filter.notch_filter(X, Fs=sample_rate, freqs=np.arange(50, 75, 50), verbose=False)
         elif type(filter) == tuple:
             # we also probably want to filter our data slightly (use FIR)
-            X = mne.filter.filter_data(X, sfreq=sample_rate, l_freq=filter[0], h_freq=filter[1])
+            X = mne.filter.filter_data(X, sfreq=sample_rate, l_freq=filter[0], h_freq=filter[1], verbose=False)
         else:
             print(f'{filter} is an unrecognised filter')
             return
@@ -172,7 +182,7 @@ def surrogate_MVAR(perm, ind, type, modes, filter, outdir, parcel_dir, parcel_fi
 
 
 def single_perm(type, modes, filter, outdir, parcel_dir,
-                parcel_files, sample_rate, glm_regs, perm, metric):
+                parcel_files, sample_rate, glm_regs, perm, metric, outstat):
 
     """
     Performs a single permutation on a group level GLM on the Direct Transfer Function metric of a
@@ -186,7 +196,10 @@ def single_perm(type, modes, filter, outdir, parcel_dir,
     :param parcel_dir: the directory to find the parcel timecourse files
     :param parcel_files: a list of parcel files to use as data input
     :param sample_rate: sample rate of the data
-    "param glm_regs: a list of simple covariates for the regressors
+    :param glm_regs: a list of simple covariates for the regressors
+    :param perm: index of permutation to avoid over-writing
+    :param metric: the statistic to use from the individual MVAR
+    :param outstat: what stat we want back from the glm for the null: beta or tstat
     :return: returns the model parameters fourier metrics, and the model itself
 
     """
@@ -229,6 +242,6 @@ def single_perm(type, modes, filter, outdir, parcel_dir,
     model = glmtools.fit.OLSModel( des, dat )
 
     #return tstats
-    return model.get_tstats()
+    return model.betas
 
 

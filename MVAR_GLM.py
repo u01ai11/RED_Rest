@@ -48,6 +48,8 @@ sample_rate = 150 # sample rate
 freq_vect = np.linspace(0, sample_rate/2, 36) #frequency vector representing the model metrics
 
 outdir = join(root_dir,'resting', 'MVAR')
+
+low_rank_IDs = np.load(join(root_dir, 'resting', 'low_rank_IDs.npy'))
 #%% now we are going to run a GLM to see how consistent connectivity is accross participants
 # The data will be in the form 136x12x12x36 (participant by parcels sender by parcel reciever by frequency power)
 # accross participants we would like to know which of these connections and at what frequencies are consistent
@@ -59,6 +61,8 @@ age = []
 IQ = []
 
 ids = [i.split('_')[0] for i in parcel_files]
+
+ids = [i for i in ids if i not in low_rank_IDs]
 
 for id_ in ids:
     #if id is not in meta, nan it
@@ -76,10 +80,13 @@ age[np.isnan(age)] = np.nanmean(age)
 IQ[np.isnan(IQ)] = np.nanmean(IQ)
 #%%
 
+nparcels = 68
+
 # then we need to load all of the participants modelled data
-glm_data = np.empty((len(parcel_files), 68,68,36))
-for i in range(len(parcel_files)):
-    id_ = parcel_files[i].split('_')[0]
+glm_data = np.empty((len(ids), nparcels,nparcels,36))
+
+for i in range(len(ids)):
+    id_ = ids[i]
     glm_data[i,:,:,:] = np.load(join(root_dir,'resting', 'MVAR', f'mvar_OLS_{id_}.npy'))[:,:,:,0]
 
 
@@ -198,8 +205,8 @@ np.save(join(outdir, 'perm_{i}.npy'), null)
 def row_shuffle_perm(des, dat, type, dimension, perm, outdir):
     print(perm)
 
-    if isfile(join(outdir, f'shuffleperm_{dimension}_{perm}.npy')):
-        return join(outdir, f'shuffleperm_{dimension}_{perm}.npy')
+    # if isfile(join(outdir, f'shuffleperm_{dimension}_{perm}.npy')):
+    #     return join(outdir, f'shuffleperm_{dimension}_{perm}.npy')
     this_desmat = des.design_matrix.copy() # copy matrix
     this_des = copy.deepcopy(des) # deep copy object
     if type == 'shuffle':
@@ -225,8 +232,8 @@ def row_shuffle_perm(des, dat, type, dimension, perm, outdir):
 
 #%% use parellel to split up shuffle permutations
 perms = 5000
-for cont in [1,2]:
-    saved_files = joblib.Parallel(n_jobs =10)(
+for cont in [2]:
+    saved_files = joblib.Parallel(n_jobs =15)(
         joblib.delayed(row_shuffle_perm)(des, dat, 'shuffle', cont, perm, outdir) for perm in range(perms))
 
 #%% check permutations are there for all of them
@@ -256,13 +263,15 @@ np.save(join(outdir, f'perm_{failed_ind}.npy'), null)
 nshape_surr = [1] + list(model.get_tstats().shape[1:4]) + [1000]
 null_surr = np.zeros(nshape_surr)
 for i in range(1000):
+    print(i)
     null_surr[0,:,:,:,i] = np.load(join(outdir, f'perm_{i}.npy'))[0]
 
 nshape_shuff = [2] + list(model.get_tstats().shape[1:4]) + [5000]
 null_shuff = np.zeros(nshape_shuff)
 for i in range(5000):
-    null_shuff[0,:,:,:,i] = np.load(join(outdir, f'shuffleperm_1_{i}.npy'))
-    null_shuff[1,:,:,:,i] = np.load(join(outdir, f'shuffleperm_2_{i}.npy'))
+    print(i)
+    null_shuff[0,:,:,:,i] = np.load(join(outdir, f'shuffleperm_1_{i}.npy'), allow_pickle=True)
+    null_shuff[1,:,:,:,i] = np.load(join(outdir, f'shuffleperm_2_{i}.npy'), allow_pickle=True)
 
 np.save(join(outdir, 'MVAR_GLM_NULLS_surr.npy'), null_surr, allow_pickle=True)
 np.save(join(outdir, 'MVAR_GLM_NULLS_shuff.npy'), null_shuff, allow_pickle=True)

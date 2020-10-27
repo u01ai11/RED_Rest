@@ -13,6 +13,7 @@ import os
 from nilearn import plotting
 import sails
 import seaborn as sns
+
 import matplotlib.pyplot as plt
 from matplotlib import patches
 import scipy as ss
@@ -25,7 +26,7 @@ from bokeh.layouts import layout
 from bokeh.models import Slider, Button
 import networkx as nx
 
-#%% setup
+#% setup
 root_dir = '/imaging/ai05/RED/RED_MEG' # the root directory for the project
 figdir = '/imaging/ai05/images'
 parcel_dir = join(root_dir, 'resting', 'parcel_timecourses') # get parcel time courses
@@ -111,7 +112,7 @@ plt.savefig(join(figdir, f'test_vect_betas_IQ.png'))
 plt.close(fig)
  #%% Make stacked bar charts / Sankey graphs
 plt_stat = copy.deepcopy(stats)
-contrast = 0 # 0 = Intercept; 1 = Age; 2 = IQ
+contrast = 1 # 0 = Intercept; 1 = Age; 2 = IQ
 top_n = 68 # choose the top X connected parcels to plot
 color_n = 5 # top X parcels to be coloured
 rev_opt = False
@@ -219,18 +220,28 @@ def plot_stacked(plt_stat, contrast, top_n, color_n, rev_opt, direction, freq_ve
 
 #%% plot the different graphs
 
-stacked_args = dict(plt_stat = copy.deepcopy(stats),top_n=68,color_n=6,rev_opt=False, freq_vect=freq_vect, label_names=label_names)
+stacked_args = dict(plt_stat = copy.deepcopy(stats),top_n=54,color_n=6,rev_opt=False, freq_vect=freq_vect, label_names=label_names)
 
 
-plot_stacked(**stacked_args, contrast=0, direction=1, cust_name='Outgoing')
-plot_stacked(**stacked_args, contrast=0, direction=0, cust_name='Incoming')
+plot_stacked(**stacked_args, contrast=0, direction=1, cust_name='Outgoing_120')
+plot_stacked(**stacked_args, contrast=0, direction=0, cust_name='Incoming_120')
 
-plot_stacked(**stacked_args, contrast=1, direction=1, cust_name='Outgoing')
-plot_stacked(**stacked_args, contrast=1, direction=0, cust_name='Incoming')
+plot_stacked(**stacked_args, contrast=1, direction=1, cust_name='Outgoing_120')
+plot_stacked(**stacked_args, contrast=1, direction=0, cust_name='Incoming_120')
 
-plot_stacked(**stacked_args, contrast=2, direction=1, cust_name='Outgoing')
-plot_stacked(**stacked_args, contrast=2, direction=0, cust_name='Incoming')
+plot_stacked(**stacked_args, contrast=2, direction=1, cust_name='Outgoing_120')
+plot_stacked(**stacked_args, contrast=2, direction=0, cust_name='Incoming_120')
 
+
+#%% community detection in network X models
+contrast = 0
+k = 2
+cli = []
+for frequency in range(len(freq_vect)):
+    meg_graph = nx.from_numpy_matrix(stats[contrast,:,:,frequency])
+    cli.append(list(nx.algorithms.community.girvan_newman(meg_graph)))
+
+[len(i) for i in cli]
 #%% have a look at the results for MRI
 MR_glm_results = np.load('/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest/MRI_GLM_RESULTS.npy')
 MRstats = np.zeros([2,68,68,1])
@@ -239,6 +250,15 @@ stacked_args = dict(plt_stat = MRstats,top_n=68,color_n=6,rev_opt=False, freq_ve
 plot_stacked(**stacked_args, contrast=0, direction=0, cust_name='MRI')
 plot_stacked(**stacked_args, contrast=1, direction=0, cust_name='MRI')
 
+#%% compare sparsity of intercepts
+
+def calc_sparse(matrix):
+    return np.sum(matrix!= 0) / np.prod(matrix.shape)
+
+sp_MEG = calc_sparse(stats[0,:,:,7])
+sp_MRI = calc_sparse(MRstats[0])
+
+print(sp_MEG, sp_MRI)
 #%% chord plot
 
 mr_chord = red_plotting.hv_chord(1, 0,  0, MRstats, re_order_ind, label_names, model, freq_vect)
@@ -273,28 +293,52 @@ age_mri_graph = nx.read_gpickle('/imaging/ai05/RED/RED_MEG/resting/analysis/RED_
 intercept_mri_graph = nx.read_gpickle('/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest/intercept_graph.npy')
 
 #%% Look at the MEG connectomes
-connec_thresh = 6
-contrast = 2
+
+alpha = .05/len(freq_vect)
+for ii in range(len(freq_vect)):
+    connec_thresh = 6
+    contrast = 0
+    metric = 0
+    frequencies = ii
+
+    if frequencies == 'all':
+        MEG_deg = np.zeros([stats.shape[1], 4, len(freq_vect)])
+
+        for i in range(len(freq_vect)):
+            MEG_deg[:,:,i] = get_graph_mets(nx.from_numpy_matrix(stats[contrast,:,:,i]))
+
+        meg_rank = MEG_deg[:,metric,:].mean(axis=1)
+    else:
+        meg_rank = get_graph_mets(nx.from_numpy_matrix(stats[contrast,:,:,frequencies]))[:, metric]
+
+    # if degree take int from average
+    if metric == 0:
+        meg_rank = np.array([int(i) for i in meg_rank])
+    #% compare that data with MRI
+    mri_rank = get_graph_mets(age_mri_graph)[:,metric]
+
+    mri_sorted_names = [label for (yp, label) in sorted(zip(mri_rank, label_names), reverse=True)]
+    meg_sorted_names = [label for (yp, label) in sorted(zip(meg_rank, label_names), reverse=True)]
+
+    in_common = np.intersect1d(mri_sorted_names, meg_sorted_names)
+    results = ss.stats.spearmanr(mri_rank, meg_rank)
+    print(results.pvalue <= alpha, ii, freq_vect[ii],results)
+
+#%% look at that specific frequency identified a bit more
+ii = 12
 metric = 2
-MEG_deg = np.zeros([stats.shape[1], 4, len(freq_vect)])
-
-for i in range(len(freq_vect)):
-    MEG_deg[:,:,i] = get_graph_mets(nx.from_numpy_matrix(stats[contrast,:,:,i]))
-
-meg_rank = MEG_deg[:,metric,:].mean(axis=1)
-
-# if degree take int from average
-if metric == 0:
-    meg_rank = np.array([int(i) for i in meg_rank])
-#% compare that data with MRI
+meg_graph = nx.from_numpy_matrix(stats[contrast,:,:,frequencies])
+meg_rank = get_graph_mets(meg_graph)[:,metric]
 mri_rank = get_graph_mets(age_mri_graph)[:,metric]
-
 mri_sorted_names = [label for (yp, label) in sorted(zip(mri_rank, label_names), reverse=True)]
 meg_sorted_names = [label for (yp, label) in sorted(zip(meg_rank, label_names), reverse=True)]
+results = ss.stats.spearmanr(mri_rank[mri_rank < 15], meg_rank[mri_rank <15])
+in_common = np.intersect1d(unique_parcels[0:10], node_names)
 
-
-
-ss.stats.spearmanr(mri_rank, meg_rank)
+#%% plot the corellation
+plt.scatter(mri_rank, meg_rank)
+plt.savefig(join(figdir, 'MRI2MEG.png'))
+plt.close('all')
 #%% plot top MEG brain areas
 
 for i in range(5):
