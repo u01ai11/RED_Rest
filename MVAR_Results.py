@@ -238,7 +238,7 @@ contrast = 0
 k = 2
 cli = []
 for frequency in range(len(freq_vect)):
-    meg_graph = nx.from_numpy_matrix(stats[contrast,:,:,frequency])
+    meg_graph = nx.DiGraph(stats[contrast,:,:,frequency])
     cli.append(list(nx.algorithms.community.girvan_newman(meg_graph)))
 
 [len(i) for i in cli]

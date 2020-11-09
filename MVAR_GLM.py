@@ -182,7 +182,7 @@ IQ[np.isnan(IQ)] = np.nanmean(IQ)
 
 null = dynamics.single_perm(type='OLS', modes=25, filter='notch', outdir=outdir,
                             parcel_dir=parcel_dir, parcel_files= parcel_files, 
-                            sample_rate=150, glm_regs=[age,IQ], perm={i}, metric='partial_directed_coherence')
+                            sample_rate=150, glm_regs=[age,IQ], perm={i}, metric='partial_directed_coherence', outstat='beta')
                             
 np.save(join(outdir, 'perm_{i}.npy'), null)
 
@@ -232,7 +232,7 @@ def row_shuffle_perm(des, dat, type, dimension, perm, outdir):
 
 #%% use parellel to split up shuffle permutations
 perms = 5000
-for cont in [2]:
+for cont in [1,2]:
     saved_files = joblib.Parallel(n_jobs =15)(
         joblib.delayed(row_shuffle_perm)(des, dat, 'shuffle', cont, perm, outdir) for perm in range(perms))
 

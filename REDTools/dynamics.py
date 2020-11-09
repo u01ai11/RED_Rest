@@ -58,6 +58,20 @@ def MVAR_single(ind, type, modes, filter, outdir, parcel_dir, parcel_files, samp
     # create delay vector from modes
     delay_vect = np.arange(modes)
 
+    # Downsample even more
+    X = sails.utils.fast_resample(X, ds_factor=2)
+    sample_rate = sample_rate/2
+
+    # Remove some random low variance channels.... probably not great but works for the moment..
+    # keeps = np.argsort(X.std(axis=(1,2)))[18:]
+    # X = X[keeps,:,:]
+
+    # Remove some bad segments - just set the to zero.
+    X = sails.utils.detect_artefacts(X, axis=1,
+                                     reject_mode='segments', segment_len=100,
+                                     ret_mode='zero_bads', gesd_args={'alpha':0.1})
+
+
     # try to orthoganlise
     try:
         X[:,:,0] = sails.orthogonalise.symmetric_orthonormal(X[:,:,0], maintain_mag=False)[0]
@@ -134,6 +148,29 @@ def surrogate_MVAR(perm, ind, type, modes, filter, outdir, parcel_dir, parcel_fi
     else:
         X_fft = np.load(join(outdir, f'fft_{type}_{id_}.npy'))
 
+
+    #reshape as sails expects (nsignals, nsamples, ntrials) Do this for orthogonalising and segment removal
+    X = X.transpose([1,2,0])
+
+    # Downsample even more
+    X = sails.utils.fast_resample(X, ds_factor=2)
+    sample_rate = sample_rate/2
+
+    # Remove some random low variance channels.... probably not great but works for the moment..
+    # keeps = np.argsort(X.std(axis=(1,2)))[18:]
+    # X = X[keeps,:,:]
+
+    # Remove some bad segments - just set the to zero.
+    X = sails.utils.detect_artefacts(X, axis=1,
+                                     reject_mode='segments', segment_len=100,
+                                     ret_mode='zero_bads', gesd_args={'alpha':0.1})
+
+    # orthoganlise
+    X[:,:,0] = sails.orthogonalise.symmetric_orthonormal(X[:,:,0], maintain_mag=False)[0]
+
+    # transpose back to expected shape for MNE stuff
+    X = X.transpose([2,0,1])
+
     # shuffle phases
     #  Get shapes
     (N, n_time) = X[0].shape
@@ -156,8 +193,8 @@ def surrogate_MVAR(perm, ind, type, modes, filter, outdir, parcel_dir, parcel_fi
     #reshape as sails expects (nsignals, nsamples, ntrials)
     X = X.transpose([1,2,0])
 
-    # orthoganlise
-    X[:,:,0] = sails.orthogonalise.symmetric_orthonormal(X[:,:,0], maintain_mag=False)[0]
+
+
     # create delay vector from modes
     delay_vect = np.arange(modes)
 
@@ -240,8 +277,11 @@ def single_perm(type, modes, filter, outdir, parcel_dir,
     #carry out the glm
     des = glmtools.design.GLMDesign.initialise(regs,contrasts)
     model = glmtools.fit.OLSModel( des, dat )
-
+    if outstat == 'beta':
+        output = model.betas
+    if outstat == 'tstat':
+        output = model.get_tstats()
     #return tstats
-    return model.betas
+    return output
 
 
