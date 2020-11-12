@@ -126,27 +126,24 @@ def surrogate_MVAR(perm, ind, type, modes, filter, outdir, parcel_dir, parcel_fi
 
     # we only need to fourier transform once, if not first permutation read from cache file
     X = np.load(join(parcel_dir, parcel_files[ind]))
-    if perm == 0:
 
-        if filter == 'notch':
-            X = mne.filter.notch_filter(X, Fs=sample_rate, freqs=np.arange(50, 75, 50), verbose=False)
-        elif type(filter) == tuple:
-            # we also probably want to filter our data slightly (use FIR)
-            X = mne.filter.filter_data(X, sfreq=sample_rate, l_freq=filter[0], h_freq=filter[1], verbose=False)
-        else:
-            print(f'{filter} is an unrecognised filter')
-            return
+    if filter == 'notch':
+        X = mne.filter.notch_filter(X, Fs=sample_rate, freqs=np.arange(50, 75, 50), verbose=False)
+    elif type(filter) == tuple:
+        # we also probably want to filter our data slightly (use FIR)
+        X = mne.filter.filter_data(X, sfreq=sample_rate, l_freq=filter[0], h_freq=filter[1], verbose=False)
+    else:
+        print(f'{filter} is an unrecognised filter')
+        return
 
-        if len(X.shape) == 1:
-            print('not correct data input, skipping')
-            return
+    if len(X.shape) == 1:
+        print('not correct data input, skipping')
+        return
 
         # fast fourier decomposition
 
         X_fft = np.fft.rfft(X[0], axis=1)
         np.save(join(outdir, f'fft_{type}_{id_}.npy'),X_fft)
-    else:
-        X_fft = np.load(join(outdir, f'fft_{type}_{id_}.npy'))
 
 
     #reshape as sails expects (nsignals, nsamples, ntrials) Do this for orthogonalising and segment removal
@@ -165,8 +162,10 @@ def surrogate_MVAR(perm, ind, type, modes, filter, outdir, parcel_dir, parcel_fi
                                      reject_mode='segments', segment_len=100,
                                      ret_mode='zero_bads', gesd_args={'alpha':0.1})
 
-    # orthoganlise
+
     X[:,:,0] = sails.orthogonalise.symmetric_orthonormal(X[:,:,0], maintain_mag=False)[0]
+
+
 
     # transpose back to expected shape for MNE stuff
     X = X.transpose([2,0,1])

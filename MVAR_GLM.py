@@ -105,6 +105,7 @@ regs.append(glmtools.regressors.ParametricRegressor(values=age,
                                                     name='Age',
                                                     preproc='z',
                                                     num_observations=dat.info['num_observations']))
+
 contrasts.append(glmtools.design.Contrast(name='Age',values=[0,1,0]))
 
 
@@ -120,8 +121,22 @@ contrasts.append(glmtools.design.Contrast(name='IQ',values=[0,0,1]))
 des = glmtools.design.GLMDesign.initialise(regs,contrasts)
 model = glmtools.fit.OLSModel( des, dat )
 
+#%%
 np.save(join(outdir, 'MVAR_GLM_MODEL.npy'), model, allow_pickle=True)
 
+
+#%% also try a different model using sklearn
+
+model2 = glmtools.fit.SKLModel()
+
+# sklearn needs design matrices in np array form, and the data needs to be flattened
+# flatten data [parsxparcelsxparcelsxfrequency] => [parsxdata]
+flat = dat.data.reshape(dat.data.shape[0], (68*68*36))
+
+model2.compute_betas(des.design_matrix, flat, {'lm': 'Lars'})
+
+# unflatten betas
+model2.betas = model2.betas.reshape(len(des.contrasts), 68,68,36)
 #%% For establishing stastical significance we need to use two types of permutation test
 # For the intercept we generate surrogate data, then permute for a null distribution
 # for the predictors/regressors, we keep the data the same, and shuffle rows of the matrix independentally for each predictor
@@ -155,6 +170,8 @@ parcel_dir = '{parcel_dir}'
 root_dir = '{root_dir}'
 parcel_files = listdir(parcel_dir) # list them
 
+low_rank_IDs = np.load(join(root_dir, 'resting', 'low_rank_IDs.npy'))
+
 meta_dat_path = join(root_dir, 'Combined2.csv')
 meta = pd.read_csv(meta_dat_path)
 tmp_id = meta.Alex_ID.to_list()# get IDS
@@ -164,6 +181,7 @@ meta.Alex_ID = tmp_id
 age = []
 IQ = []
 ids = [i.split('_')[0] for i in parcel_files]
+ids = [i for i in ids if i not in low_rank_IDs]
 
 for id_ in ids:
     #if id is not in meta, nan it
@@ -180,6 +198,7 @@ IQ = np.array(IQ)
 age[np.isnan(age)] = np.nanmean(age)
 IQ[np.isnan(IQ)] = np.nanmean(IQ)
 
+parcel_files = [i for i in parcel_files if i.split('_')[0] in ids]
 null = dynamics.single_perm(type='OLS', modes=25, filter='notch', outdir=outdir,
                             parcel_dir=parcel_dir, parcel_files= parcel_files, 
                             sample_rate=150, glm_regs=[age,IQ], perm={i}, metric='partial_directed_coherence', outstat='beta')

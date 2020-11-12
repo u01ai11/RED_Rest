@@ -51,18 +51,18 @@ model = np.load(join(outdir, 'MVAR_GLM_MODEL.npy'), allow_pickle=True)[()]
 
 # if we already have the thresholds saved load them, otherwise calculate the new ones and save
 if isfile(join(outdir, 'MVAR_GLM_95_thresh.npy')):
-    thresh = nulls_surr = np.load(join(outdir, 'MVAR_GLM_95_thresh.npy'))
+    thresh = nulls_surr = np.load(join(outdir, 'MVAR_GLM_99_thresh.npy'))
 
     # This will take a while due to numpy loading being slow
 else:
     nulls_surr = np.load(join(outdir, 'MVAR_GLM_NULLS_surr.npy'))
     nulls_shuff = np.load(join(outdir, 'MVAR_GLM_NULLS_shuff.npy'))
     # get threshold
-    thresh_surr = np.percentile(nulls_surr, 95, axis=4)
-    thresh_shuff = np.percentile(nulls_shuff, 95, axis=4)
+    thresh_surr = np.percentile(nulls_surr, 99, axis=4)
+    thresh_shuff = np.percentile(nulls_shuff, 99, axis=4)
 
     thresh  = np.concatenate((thresh_surr, thresh_shuff))
-    np.save(join(outdir, 'MVAR_GLM_95_thresh.npy'), thresh, allow_pickle=True)
+    np.save(join(outdir, 'MVAR_GLM_99_thresh.npy'), thresh, allow_pickle=True)
 
 sig_= model.tstats >= thresh # mask for data
 
@@ -95,6 +95,8 @@ renderer.save(plot, join(figdir, 'chord_MVAR_AGE_animated'))
 hmap = hv.HoloMap({i: red_plotting.hv_chord(2, i,  0, stats, re_order_ind, label_names, model, freq_vect) for i in freq_range})
 plot = renderer.get_plot(hmap)
 renderer.save(plot, join(figdir, 'chord_MVAR_IQ_animated'))
+
+#%% MRI
 
 
 
@@ -220,28 +222,35 @@ def plot_stacked(plt_stat, contrast, top_n, color_n, rev_opt, direction, freq_ve
 
 #%% plot the different graphs
 
-stacked_args = dict(plt_stat = copy.deepcopy(stats),top_n=54,color_n=6,rev_opt=False, freq_vect=freq_vect, label_names=label_names)
+stacked_args = dict(plt_stat = copy.deepcopy(stats),top_n=68,color_n=6,rev_opt=False, freq_vect=freq_vect, label_names=label_names)
 
+thislab = 'new99'
 
-plot_stacked(**stacked_args, contrast=0, direction=1, cust_name='Outgoing_120')
-plot_stacked(**stacked_args, contrast=0, direction=0, cust_name='Incoming_120')
+plot_stacked(**stacked_args, contrast=0, direction=1, cust_name=f'Outgoing_{thislab}')
+plot_stacked(**stacked_args, contrast=0, direction=0, cust_name=f'Incoming_{thislab}')
 
-plot_stacked(**stacked_args, contrast=1, direction=1, cust_name='Outgoing_120')
-plot_stacked(**stacked_args, contrast=1, direction=0, cust_name='Incoming_120')
+plot_stacked(**stacked_args, contrast=1, direction=1, cust_name=f'Outgoing_{thislab}')
+plot_stacked(**stacked_args, contrast=1, direction=0, cust_name=f'Incoming_{thislab}')
 
-plot_stacked(**stacked_args, contrast=2, direction=1, cust_name='Outgoing_120')
-plot_stacked(**stacked_args, contrast=2, direction=0, cust_name='Incoming_120')
+plot_stacked(**stacked_args, contrast=2, direction=1, cust_name=f'Outgoing_{thislab}')
+plot_stacked(**stacked_args, contrast=2, direction=0, cust_name=f'Incoming_{thislab}')
 
 
 #%% community detection in network X models
-contrast = 0
+contrast = 1
 k = 2
 cli = []
 for frequency in range(len(freq_vect)):
-    meg_graph = nx.DiGraph(stats[contrast,:,:,frequency])
-    cli.append(list(nx.algorithms.community.girvan_newman(meg_graph)))
-
+    meg_graph = nx.Graph(stats[contrast,:,:,frequency])
+    cli.append(list(nx.algorithms.community.k_clique_communities(meg_graph,k)))
+    #cli.append(nx.algorithms.rich_club_coefficient(meg_graph))
 [len(i) for i in cli]
+
+#%% simulated knock-out on global efficiency
+
+def knock_out(graph):
+    for i in range(len())
+
 #%% have a look at the results for MRI
 MR_glm_results = np.load('/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest/MRI_GLM_RESULTS.npy')
 MRstats = np.zeros([2,68,68,1])
@@ -297,7 +306,7 @@ intercept_mri_graph = nx.read_gpickle('/imaging/ai05/RED/RED_MEG/resting/analysi
 alpha = .05/len(freq_vect)
 for ii in range(len(freq_vect)):
     connec_thresh = 6
-    contrast = 0
+    contrast = 1
     metric = 0
     frequencies = ii
 
@@ -342,7 +351,7 @@ plt.close('all')
 #%% plot top MEG brain areas
 
 for i in range(5):
-    fig, ax = plot_roi([meg_sorted_names[i]])
+    fig, ax = plot_roi([mri_sorted_names[i]])
     plt.savefig(join(figdir, f'{meg_sorted_names[i]}.png'))
     plt.close('all')
 
