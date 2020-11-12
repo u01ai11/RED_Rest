@@ -140,10 +140,9 @@ def surrogate_MVAR(perm, ind, type, modes, filter, outdir, parcel_dir, parcel_fi
         print('not correct data input, skipping')
         return
 
-        # fast fourier decomposition
-
-        X_fft = np.fft.rfft(X[0], axis=1)
-        np.save(join(outdir, f'fft_{type}_{id_}.npy'),X_fft)
+    # fast fourier decomposition
+    X_fft = np.fft.rfft(X[0], axis=1)
+    np.save(join(outdir, f'fft_{type}_{id_}.npy'),X_fft)
 
 
     #reshape as sails expects (nsignals, nsamples, ntrials) Do this for orthogonalising and segment removal
