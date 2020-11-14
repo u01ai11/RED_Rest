@@ -49,20 +49,21 @@ outdir = join(root_dir,'resting', 'MVAR')
 #%% load data for the null montecarlo distribution and the model
 model = np.load(join(outdir, 'MVAR_GLM_MODEL.npy'), allow_pickle=True)[()]
 
+alpha = 99
 # if we already have the thresholds saved load them, otherwise calculate the new ones and save
-if isfile(join(outdir, 'MVAR_GLM_95_thresh.npy')):
-    thresh = nulls_surr = np.load(join(outdir, 'MVAR_GLM_99_thresh.npy'))
+if isfile(join(outdir, f'MVAR_GLM_{alpha}_thresh.npy')):
+    thresh = nulls_surr = np.load(join(outdir, f'MVAR_GLM_{alpha}_thresh.npy'))
 
     # This will take a while due to numpy loading being slow
 else:
     nulls_surr = np.load(join(outdir, 'MVAR_GLM_NULLS_surr.npy'))
     nulls_shuff = np.load(join(outdir, 'MVAR_GLM_NULLS_shuff.npy'))
     # get threshold
-    thresh_surr = np.percentile(nulls_surr, 99, axis=4)
-    thresh_shuff = np.percentile(nulls_shuff, 99, axis=4)
+    thresh_surr = np.percentile(nulls_surr, alpha, axis=4)
+    thresh_shuff = np.percentile(nulls_shuff, alpha, axis=4)
 
     thresh  = np.concatenate((thresh_surr, thresh_shuff))
-    np.save(join(outdir, 'MVAR_GLM_99_thresh.npy'), thresh, allow_pickle=True)
+    np.save(join(outdir, f'MVAR_GLM_{alpha}_thresh.npy'), thresh, allow_pickle=True)
 
 sig_= model.tstats >= thresh # mask for data
 
@@ -222,9 +223,9 @@ def plot_stacked(plt_stat, contrast, top_n, color_n, rev_opt, direction, freq_ve
 
 #%% plot the different graphs
 
-stacked_args = dict(plt_stat = copy.deepcopy(stats),top_n=68,color_n=6,rev_opt=False, freq_vect=freq_vect, label_names=label_names)
+stacked_args = dict(plt_stat = copy.deepcopy(betas),top_n=68,color_n=6,rev_opt=False, freq_vect=freq_vect, label_names=label_names)
 
-thislab = 'new99'
+thislab = 'no_thresh'
 
 plot_stacked(**stacked_args, contrast=0, direction=1, cust_name=f'Outgoing_{thislab}')
 plot_stacked(**stacked_args, contrast=0, direction=0, cust_name=f'Incoming_{thislab}')

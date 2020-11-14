@@ -29,6 +29,7 @@ from bokeh.io import output_file, save, show
 from bokeh.io import curdoc
 from bokeh.layouts import layout
 from bokeh.models import Slider, Button
+import time
 #%%
 root_dir = '/imaging/ai05/RED/RED_MEG' # the root directory for the project
 figdir = '/imaging/ai05/images'
@@ -150,11 +151,11 @@ null = dynamics.single_perm(type='OLS', modes=25, filter='notch', outdir=join(ro
                             glm_regs=[], perm=27, metric='partial_directed_coherence')
 
 #%% send to cluster for multiple permutations of the surrogate data
-perms = 1000
+perms = 999
 
 pythonpath = '/home/ai05/.conda/envs/mne_2/bin/python'
-for i in range(perms):
-    pycom = f"""
+
+pycom = f"""
 import sys
 sys.path.insert(0, '/imaging/ai05/RED/RED_MEG/resting/analysis/RED_Rest')
 from REDTools import dynamics
@@ -169,6 +170,8 @@ outdir = '{outdir}'
 parcel_dir = '{parcel_dir}'
 root_dir = '{root_dir}'
 parcel_files = listdir(parcel_dir) # list them
+
+ii = sys.argv[1] # input number from SLURM array 
 
 low_rank_IDs = np.load(join(root_dir, 'resting', 'low_rank_IDs.npy'))
 
@@ -201,23 +204,36 @@ IQ[np.isnan(IQ)] = np.nanmean(IQ)
 parcel_files = [i for i in parcel_files if i.split('_')[0] in ids]
 null = dynamics.single_perm(type='OLS', modes=25, filter='notch', outdir=outdir,
                             parcel_dir=parcel_dir, parcel_files= parcel_files, 
-                            sample_rate=150, glm_regs=[age,IQ], perm={i}, metric='partial_directed_coherence', outstat='beta')
+                            sample_rate=150, glm_regs=[age,IQ], perm=ii, metric='partial_directed_coherence', outstat='beta')
                             
-np.save(join(outdir, 'perm_{i}.npy'), null)
+np.save(join(outdir, 'perm_'+str(ii)+'.npy'), null)
 
     """
-    # save to file
-    print(pycom, file=open(join(outdir, 'cluster_scripts', f'{i}_permscript.py'), 'w'))
+# save to file
+print(pycom, file=open(join(outdir, 'cluster_scripts', f'surrogate_script.py'), 'w'))
 
-    # construct csh file
-    tcshf = f"""#!/bin/tcsh
-            {pythonpath} {join(outdir, 'cluster_scripts', f'{i}_permscript.py')}
-                    """
-    # save to directory
-    print(tcshf, file=open(join(outdir, 'cluster_scripts', f'{i}_permscript.csh'), 'w'))
+# # construct csh file
+# tcshf = f"""#!/bin/tcsh
+# {pythonpath} {join(outdir, 'cluster_scripts', f'{i}_permscript.py')}
+#          """
 
-    # execute this on the cluster
-    os.system(f"sbatch --job-name=SURR_MVAR_{i} --mincpus=12 -t 0-2:00 {join(outdir, 'cluster_scripts', f'{i}_permscript.csh')}")
+# construct sh file
+shf = f"""#!/bin/bash
+#SBATCH -t 0-2:00
+#SBATCH --job-name=alex_mvar_array
+#SBATCH --mincpus=12
+#SBATCH --out=mvar_array_%j.out
+#SBATCH --requeue 
+#SBATCH -a 1-{perms}
+{pythonpath} {join(outdir, 'cluster_scripts', f'surrogate_script.py')} $SLURM_ARRAY_TASK_ID
+"""
+# save to directory
+print(shf, file=open(join(outdir, 'cluster_scripts', 'surrogate_script.csh'), 'w'))
+
+os.system(f"sbatch {join(outdir, 'cluster_scripts', 'surrogate_script.csh')}")
+# execute this on the cluster
+# os.system(f"sbatch --job-name=SURR_MVAR_{i} --mincpus=12 -t 0-2:00 {join(outdir, 'cluster_scripts', f'{i}_permscript.csh')}")
+#
 
 #%% We need to do the shuffle permutations for the regressors seperately to the surrogate data
 
@@ -258,7 +274,7 @@ for cont in [1,2]:
 #%% check permutations are there for all of them
 perms = 5000
 missing_surr = []
-for i in range(perms):
+for i in range(1000):
     if isfile(join(outdir, f'perm_{i}.npy')) == False:
         missing_surr.append(i)
 

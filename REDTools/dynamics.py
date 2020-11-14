@@ -28,7 +28,6 @@ def MVAR_single(ind, type, modes, filter, outdir, parcel_dir, parcel_files, samp
     :return: returns the model parameters fourier metrics, and the model itself
 
     """
-    freq_vect = np.linspace(0, sample_rate/2, 36) #frequency vector representing the model metrics
 
     #id
     id_ = parcel_files[ind].split('_')[0]
@@ -55,6 +54,11 @@ def MVAR_single(ind, type, modes, filter, outdir, parcel_dir, parcel_files, samp
         return
     #reshape as sails expects (nsignals, nsamples, ntrials)
     X = X.transpose([1,2,0])
+
+    # Remove some bad segments - just set the to zero.
+    X = sails.utils.detect_artefacts(X, axis=1,
+                                     reject_mode='segments', segment_len=100,
+                                     ret_mode='zero_bads', gesd_args={'alpha':0.1})
     # create delay vector from modes
     delay_vect = np.arange(modes)
 
@@ -62,14 +66,10 @@ def MVAR_single(ind, type, modes, filter, outdir, parcel_dir, parcel_files, samp
     X = sails.utils.fast_resample(X, ds_factor=2)
     sample_rate = sample_rate/2
 
+
     # Remove some random low variance channels.... probably not great but works for the moment..
     # keeps = np.argsort(X.std(axis=(1,2)))[18:]
     # X = X[keeps,:,:]
-
-    # Remove some bad segments - just set the to zero.
-    X = sails.utils.detect_artefacts(X, axis=1,
-                                     reject_mode='segments', segment_len=100,
-                                     ret_mode='zero_bads', gesd_args={'alpha':0.1})
 
 
     # try to orthoganlise
@@ -84,6 +84,8 @@ def MVAR_single(ind, type, modes, filter, outdir, parcel_dir, parcel_files, samp
     elif type == 'VieiraMorf':
         m = sails.VieiraMorfLinearModel.fit_model(X, delay_vect)
     # get fourier decomp of model coefficients
+
+    freq_vect = np.linspace(0, sample_rate/2, 36) #frequency vector representing the model metrics
     Fo = sails.mvar_metrics.FourierMvarMetrics.initialise(m, sample_rate, freq_vect)
 
 
@@ -118,7 +120,7 @@ def surrogate_MVAR(perm, ind, type, modes, filter, outdir, parcel_dir, parcel_fi
 
     """
 
-    freq_vect = np.linspace(0, sample_rate/2, 36) #frequency vector representing the model metrics
+
 
     #id
     id_ = parcel_files[ind].split('_')[0]
@@ -142,24 +144,20 @@ def surrogate_MVAR(perm, ind, type, modes, filter, outdir, parcel_dir, parcel_fi
 
     # fast fourier decomposition
     X_fft = np.fft.rfft(X[0], axis=1)
-    np.save(join(outdir, f'fft_{type}_{id_}.npy'),X_fft)
 
 
     #reshape as sails expects (nsignals, nsamples, ntrials) Do this for orthogonalising and segment removal
     X = X.transpose([1,2,0])
 
-    # Downsample even more
-    X = sails.utils.fast_resample(X, ds_factor=2)
-    sample_rate = sample_rate/2
-
-    # Remove some random low variance channels.... probably not great but works for the moment..
-    # keeps = np.argsort(X.std(axis=(1,2)))[18:]
-    # X = X[keeps,:,:]
-
     # Remove some bad segments - just set the to zero.
     X = sails.utils.detect_artefacts(X, axis=1,
                                      reject_mode='segments', segment_len=100,
                                      ret_mode='zero_bads', gesd_args={'alpha':0.1})
+
+
+    # Downsample even more
+    X = sails.utils.fast_resample(X, ds_factor=2)
+    sample_rate = sample_rate/2
 
 
     X[:,:,0] = sails.orthogonalise.symmetric_orthonormal(X[:,:,0], maintain_mag=False)[0]
@@ -202,6 +200,7 @@ def surrogate_MVAR(perm, ind, type, modes, filter, outdir, parcel_dir, parcel_fi
     elif type == 'VieiraMorf':
         m = sails.VieiraMorfLinearModel.fit_model(X, delay_vect)
     # get fourier decomp of model coefficients
+    freq_vect = np.linspace(0, sample_rate/2, 36) #frequency vector representing the model metrics
     Fo = sails.mvar_metrics.FourierMvarMetrics.initialise(m, sample_rate, freq_vect)
     # save to file
     # get name
